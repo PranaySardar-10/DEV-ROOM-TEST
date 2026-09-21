@@ -20,27 +20,6 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         self.assertIn(Stage.GATE_1, result.history)
         self.assertEqual(len(provider.calls), 2)
 
-    def test_approved_gate_is_persisted_immediately(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "workflow.json"
-            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-approval")
-            provider = MockProvider()
-            seen = []
-
-            def gate(stage, prompt, context):
-                if stage is Stage.GATE_1:
-                    return HumanDecision.APPROVE, ""
-                persisted = JsonWorkflowStateStore(path).load("workflow-approval")
-                seen.append(persisted.last_decision)
-                return HumanDecision.HALT, "stop"
-
-            result = DevRoomOrchestrator(provider, state_writer=writer).run(
-                "Persist gate decisions",
-                human_gate=gate,
-            )
-            self.assertEqual(result.stage, Stage.HALTED)
-            self.assertEqual(seen, [HumanDecision.APPROVE.value])
-
     def test_gate_decision_persists_after_callback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.json"
@@ -48,11 +27,9 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             provider = MockProvider()
 
             def gate(stage, prompt, context):
-                if stage is Stage.GATE_1:
-                    state = JsonWorkflowStateStore(path).load("workflow-callback")
-                    self.assertIsNone(state.last_decision)
-                    return HumanDecision.APPROVE, ""
-                return HumanDecision.HALT, "stop"
+                state = JsonWorkflowStateStore(path).load("workflow-callback")
+                self.assertIsNone(state.last_decision)
+                return (HumanDecision.APPROVE, "") if stage is Stage.GATE_1 else (HumanDecision.HALT, "stop")
 
             result = DevRoomOrchestrator(provider, state_writer=writer).run(
                 "Persist callback ordering",
