@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 from .orchestrator import AgentProvider, AgentResult, AgentTask
 from .sandbox_policy import READ_ONLY, WORKSPACE_WRITE, RoleSandboxPolicy
@@ -38,6 +39,7 @@ class CodexCliProvider:
             raise RuntimeError(f"Codex CLI not found: {self.config.command!r}.")
 
         sandbox = self._effective_sandbox(task)
+        before = self._workspace_fingerprint(str(workspace)) if task.role == "Implementer" else None
         print(f"[DevRoom] {task.role} → Codex started", flush=True)
         try:
             completed = subprocess.run(
@@ -64,7 +66,52 @@ class CodexCliProvider:
         summary = self._extract_final_message(completed.stdout)
         if not summary:
             raise RuntimeError("Codex completed without a final agent message.")
-        return AgentResult(role=task.role, summary=summary)
+        artifacts = self._implementation_artifacts(str(workspace), before) if task.role == "Implementer" else ()
+        return AgentResult(role=task.role, summary=summary, artifacts=artifacts)
+
+    @staticmethod
+    def _workspace_fingerprint(workspace: str) -> tuple[str, tuple[str, ...]]:
+        try:
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+            ).stdout.strip()
+            status = subprocess.run(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=True,
+            ).stdout.splitlines()
+        except (OSError, subprocess.CalledProcessError):
+            return ("", ())
+        return (head, tuple(line for line in status if not _ignored_runtime_path(line)))
+
+    @staticmethod
+    def _implementation_artifacts(
+        workspace: str,
+        before: tuple[str, tuple[str, ...]] | None,
+    ) -> tuple[str, ...]:
+        after = CodexCliProvider._workspace_fingerprint(workspace)
+        if before is None or after == before:
+            return ()
+        before_head, before_status = before
+        after_head, after_status = after
+        changed = sorted(set(before_status) | set(after_status))
+        if before_head != after_head:
+            changed.append(f"git:{after_head}")
+        return tuple(dict.fromkeys(changed))
+
+def _ignored_runtime_path(status_line: str) -> bool:
+    path = status_line[3:].strip()
+    return path.startswith(".devroom/") or "__pycache__/" in path or path.endswith(".pyc")
 
     def _effective_sandbox(self, task: AgentTask) -> str:
         maximum = self.sandbox_policy.sandbox_for(task.role)
