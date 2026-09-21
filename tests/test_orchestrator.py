@@ -20,6 +20,46 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         self.assertIn(Stage.GATE_1, result.history)
         self.assertEqual(len(provider.calls), 2)
 
+    def test_approved_gate_is_persisted_immediately(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-approval")
+            provider = MockProvider()
+            seen = []
+
+            def gate(stage, prompt, context):
+                if stage is Stage.GATE_1:
+                    persisted = JsonWorkflowStateStore(path).load("workflow-approval")
+                    seen.append(persisted.last_decision)
+                    self.assertEqual(context["architecture_summary"], provider.calls[1].goal.split(":", 1)[-1].strip())
+                    return HumanDecision.APPROVE, ""
+                return HumanDecision.HALT, "stop"
+
+            result = DevRoomOrchestrator(provider, state_writer=writer).run(
+                "Persist gate decisions",
+                human_gate=gate,
+            )
+            self.assertEqual(result.stage, Stage.HALTED)
+            self.assertEqual(seen, [HumanDecision.APPROVE.value])
+
+    def test_missing_implementation_artifacts_halt_before_review(self) -> None:
+        class EmptyImplementerProvider(MockProvider):
+            def execute(self, task):
+                self.calls.append(task)
+                if task.role == "Implementer":
+                    from devroom.orchestrator import AgentResult
+                    return AgentResult(role=task.role, summary="No implementation was produced.")
+                return AgentResult(role=task.role, summary=f"Mock {task.role} completed.", artifacts=("mock",))
+
+        provider = EmptyImplementerProvider()
+        result = DevRoomOrchestrator(provider).run(
+            "Require implementation proof",
+            human_gate=self.approve_all,
+        )
+        self.assertEqual(result.stage, Stage.HALTED)
+        self.assertIn("implementation artifacts", result.halted_reason or "")
+        self.assertEqual([task.role for task in provider.calls], ["Lead", "Architect", "Implementer"])
+
     def test_full_workflow_reaches_complete_after_human_approval(self) -> None:
         provider = MockProvider()
         result = DevRoomOrchestrator(provider).run(
