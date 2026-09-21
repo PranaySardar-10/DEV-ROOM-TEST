@@ -4,7 +4,6 @@ import json
 import shutil
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 
 from .orchestrator import AgentProvider, AgentResult, AgentTask
 
@@ -20,8 +19,8 @@ class CodexCliConfig:
 class CodexCliProvider:
     """Run a DevRoom role through the installed Codex CLI.
 
-    The provider is intentionally thin: DevRoom owns role/context routing while
-    Codex owns model execution, tool use, and its sandbox.
+    DevRoom owns role/context routing while Codex owns model execution, tool use,
+    and its sandbox. The target workspace is passed explicitly to Codex.
     """
 
     def __init__(self, config: CodexCliConfig | None = None) -> None:
@@ -34,21 +33,16 @@ class CodexCliProvider:
                 "Install/login to Codex before enabling this provider."
             )
 
-        prompt = self._build_prompt(task)
-        command = [
-            self.config.command,
-            "exec",
-            "--json",
-            "--sandbox",
-            self.config.sandbox,
-        ]
-        if self.config.ephemeral:
-            command.append("--ephemeral")
-        command.append(prompt)
+        workspace = task.context.get("workspace")
+        if not workspace:
+            raise ValueError(
+                "Codex tasks require an explicit 'workspace' context value."
+            )
 
+        command = self._build_command(task, str(workspace))
         completed = subprocess.run(
             command,
-            cwd=task.context.get("workspace") or None,
+            cwd=str(workspace),
             capture_output=True,
             text=True,
             timeout=self.config.timeout_seconds,
@@ -66,6 +60,21 @@ class CodexCliProvider:
             raise RuntimeError("Codex completed without a final agent message.")
 
         return AgentResult(role=task.role, summary=summary)
+
+    def _build_command(self, task: AgentTask, workspace: str) -> list[str]:
+        command = [
+            self.config.command,
+            "exec",
+            "--json",
+            "--cd",
+            workspace,
+            "--sandbox",
+            self.config.sandbox,
+        ]
+        if self.config.ephemeral:
+            command.append("--ephemeral")
+        command.append(self._build_prompt(task))
+        return command
 
     @staticmethod
     def _build_prompt(task: AgentTask) -> str:
