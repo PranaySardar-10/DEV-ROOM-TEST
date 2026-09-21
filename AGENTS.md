@@ -19,7 +19,15 @@ DevRoom is a provider-independent multi-agent software-development orchestrator.
 - Reviewers do not directly bypass the implementation/review process.
 - QA reports evidence; it does not modify implementation.
 - The orchestrator must remain provider-independent.
+- A provider may back multiple logical roles, but each role has its own instructions and context.
+- Reviewer execution must receive an independent review context rather than inheriting implementation assumptions.
 - Git is the durable project state; conversation history is not the source of truth.
 
+## Provider strategy
+- Codex is the primary high-capability provider for Lead, Architect, Implementer, and Reviewer roles.
+- Implementer and Reviewer are separate logical agents even when both use Codex.
+- Local Qwen workers are fallback/low-cost providers for bounded work such as QA and repetitive tasks.
+- Provider names are configuration, not workflow logic.
+
 ## Current milestone
-Build and test the provider-neutral orchestration state machine before adding real model providers.
+Validate provider routing and role isolation before adding live model adapters or persistent workflow state.
