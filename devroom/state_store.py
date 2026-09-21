@@ -14,6 +14,8 @@ class PersistedWorkflow:
     history: tuple[str, ...]
     results: tuple[dict[str, object], ...]
     halted_reason: str | None = None
+    last_decision: str | None = None
+    last_feedback: str | None = None
 
 
 class JsonWorkflowStateStore:
@@ -32,6 +34,8 @@ class JsonWorkflowStateStore:
             "history": list(state.history),
             "results": list(state.results),
             "halted_reason": state.halted_reason,
+            "last_decision": state.last_decision,
+            "last_feedback": state.last_feedback,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
@@ -50,6 +54,8 @@ class JsonWorkflowStateStore:
             history=tuple(str(item) for item in payload["history"]),
             results=tuple(dict(item) for item in payload["results"]),
             halted_reason=payload.get("halted_reason"),
+            last_decision=payload.get("last_decision"),
+            last_feedback=payload.get("last_feedback"),
         )
 
 
@@ -62,7 +68,15 @@ class WorkflowStateWriter:
         self.store = store
         self.workflow_id = workflow_id
 
-    def write(self, stage: str, history: Iterable[str], results: Iterable[dict[str, object]], halted_reason: str | None = None) -> None:
+    def write(
+        self,
+        stage: str,
+        history: Iterable[str],
+        results: Iterable[dict[str, object]],
+        halted_reason: str | None = None,
+        last_decision: str | None = None,
+        last_feedback: str | None = None,
+    ) -> None:
         self.store.save(
             PersistedWorkflow(
                 workflow_id=self.workflow_id,
@@ -70,6 +84,8 @@ class WorkflowStateWriter:
                 history=tuple(history),
                 results=tuple(dict(item) for item in results),
                 halted_reason=halted_reason,
+                last_decision=last_decision,
+                last_feedback=last_feedback,
             )
         )
 
