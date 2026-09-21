@@ -25,21 +25,33 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             path = Path(directory) / "workflow.json"
             writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-callback")
             provider = MockProvider()
-            seen = {}
+            seen = []
 
             def gate(stage, prompt, context):
                 persisted = JsonWorkflowStateStore(path).load("workflow-callback")
-                seen[stage] = persisted.last_decision
-                return (HumanDecision.APPROVE, "") if stage is Stage.GATE_1 else (HumanDecision.HALT, "stop")
+                seen.append((stage, persisted.last_decision))
+                return (
+                    (HumanDecision.APPROVE, "")
+                    if stage is Stage.GATE_1
+                    else (HumanDecision.HALT, "stop")
+                )
 
-            result = DevRoomOrchestrator(provider, state_writer=writer).run(
+            result = DevRoomOrchestrator(
+                provider,
+                state_writer=writer,
+            ).run(
                 "Persist callback ordering",
                 human_gate=gate,
             )
             final_state = JsonWorkflowStateStore(path).load("workflow-callback")
             self.assertEqual(result.stage, Stage.HALTED)
-            self.assertIsNone(seen[Stage.GATE_1])
-            self.assertEqual(seen[Stage.GATE_2], HumanDecision.APPROVE.value)
+            self.assertEqual(
+                seen,
+                [
+                    (Stage.GATE_1, None),
+                    (Stage.GATE_2, HumanDecision.APPROVE.value),
+                ],
+            )
             self.assertEqual(final_state.last_decision, HumanDecision.HALT.value)
             self.assertEqual(final_state.last_feedback, "stop")
 
@@ -98,11 +110,13 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             (HumanDecision.APPROVE, ""),
             (HumanDecision.APPROVE, ""),
         ])
+
         result = DevRoomOrchestrator(provider).run(
             "Implement persistent vehicle ownership",
             workspace=r"D:\DEV_ROOM_TEST",
             human_gate=lambda stage, prompt, context: next(decisions),
         )
+
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
             [task.role for task in provider.calls],
@@ -117,18 +131,27 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             (HumanDecision.REQUEST_CHANGES, "The vehicle clips through the road in Unity."),
             (HumanDecision.APPROVE, ""),
         ])
+
         result = DevRoomOrchestrator(provider).run(
             "Implement vehicle suspension",
             workspace=r"D:\DEV_ROOM_TEST",
             human_gate=lambda stage, prompt, context: next(decisions),
         )
+
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
             [task.role for task in provider.calls],
-            ["Lead", "Architect", "Implementer", "Reviewer", "QA", "Lead",
-             "Implementer", "Reviewer", "QA", "Lead"],
+            [
+                "Lead", "Architect",
+                "Implementer", "Reviewer", "QA", "Lead",
+                "Implementer", "Reviewer", "QA", "Lead",
+            ],
         )
-        self.assertEqual(provider.calls[6].context["human_feedback"], "The vehicle clips through the road in Unity.")
+        second_implementation = provider.calls[6]
+        self.assertEqual(
+            second_implementation.context["human_feedback"],
+            "The vehicle clips through the road in Unity.",
+        )
 
     def test_gate_2_halt_stops_workflow(self) -> None:
         provider = MockProvider()
@@ -163,15 +186,16 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.json"
             writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-1")
-            result = DevRoomOrchestrator(MockProvider(), state_writer=writer).run(
-                "Persist this workflow",
-                human_gate=self.approve_all,
-            )
+            result = DevRoomOrchestrator(
+                MockProvider(),
+                state_writer=writer,
+            ).run("Persist this workflow", human_gate=self.approve_all)
+
             persisted = JsonWorkflowStateStore(path).load("workflow-1")
             self.assertEqual(result.stage.value, persisted.stage)
             self.assertEqual(tuple(stage.value for stage in result.history), persisted.history)
             self.assertEqual(len(result.results), len(persisted.results))
-            self.assertIsNone(persisted.halted_reason)
+            self.assertEqual(persisted.halted_reason, None)
 
     def test_blank_goal_and_workspace_are_rejected(self) -> None:
         provider = MockProvider()
