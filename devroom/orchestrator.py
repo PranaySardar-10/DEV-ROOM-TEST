@@ -150,8 +150,7 @@ class DevRoomOrchestrator:
             if not isinstance(decision, HumanDecision):
                 decision = HumanDecision(decision)
             feedback = feedback.strip()
-            # Persist the human decision immediately. Agents must never have to infer
-            # an approval from stale pre-gate durable state.
+            # Persist the actual decision after the human callback returns.
             persist(stage, last_decision=decision, last_feedback=feedback)
             return decision, feedback
 
