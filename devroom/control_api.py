@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Mapping
 
-from .orchestrator import AgentProvider, AgentResult, AgentTask, DevRoomOrchestrator, HumanDecision, Stage
+from .orchestrator import AgentProvider, AgentResult, DevRoomOrchestrator, HumanDecision, Stage
 from .state_store import WorkflowStateWriter
 
 
@@ -30,7 +30,7 @@ class _TrackingProvider:
         self.controller = controller
         self.provider = provider
 
-    def execute(self, task: AgentTask) -> AgentResult:
+    def execute(self, task):
         self.controller._set_agent(task.role, task.context.get("provider", "unknown"))
         try:
             result = self.provider.execute(task)
@@ -125,7 +125,7 @@ class WorkflowController:
                 {"role": result.role, "summary": result.summary, "artifacts": list(result.artifacts)}
             )
 
-    def _gate(self, stage: Stage, prompt: str, context: Mapping[str, str]) -> tuple[HumanDecision, str]:
+    def _gate(self, stage: Stage, prompt: str, context: Mapping[str, str]):
         with self._condition:
             self._active_gate = stage
             self._snapshot.stage = stage.value
@@ -143,14 +143,6 @@ class WorkflowController:
             self._snapshot.feedback.append(
                 {"gate": stage.value, "decision": decision.value, "feedback": feedback}
             )
-            if feedback:
-                self._snapshot.feedback.append(
-                    {
-                        "gate": stage.value,
-                        "decision": decision.value,
-                        "feedback": feedback,
-                    }
-                )
             return decision, feedback
 
     def _run(self) -> None:
@@ -191,7 +183,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
         self.end_headers()
-        self.wfile.write(data)
+        if status != 204:
+            self.wfile.write(data)
 
     def do_OPTIONS(self) -> None:
         self._send(204, {})
