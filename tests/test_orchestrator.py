@@ -1,6 +1,9 @@
+import tempfile
 import unittest
+from pathlib import Path
 
 from devroom.orchestrator import DevRoomOrchestrator, HumanDecision, MockProvider, Stage
+from devroom.state_store import JsonWorkflowStateStore, WorkflowStateWriter
 
 
 class DevRoomOrchestratorTests(unittest.TestCase):
@@ -126,6 +129,21 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         )
         self.assertEqual(result.stage, Stage.HALTED)
         self.assertIn("Maximum human feedback cycles", result.halted_reason or "")
+
+    def test_persists_final_workflow_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-1")
+            result = DevRoomOrchestrator(
+                MockProvider(),
+                state_writer=writer,
+            ).run("Persist this workflow", human_gate=self.approve_all)
+
+            persisted = JsonWorkflowStateStore(path).load("workflow-1")
+            self.assertEqual(result.stage.value, persisted.stage)
+            self.assertEqual(tuple(stage.value for stage in result.history), persisted.history)
+            self.assertEqual(len(result.results), len(persisted.results))
+            self.assertEqual(persisted.halted_reason, None)
 
     def test_blank_goal_and_workspace_are_rejected(self) -> None:
         provider = MockProvider()
