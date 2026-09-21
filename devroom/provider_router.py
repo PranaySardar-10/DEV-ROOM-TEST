@@ -64,7 +64,7 @@ DEFAULT_ROLE_BINDINGS = {
         ),
     ),
     "QA": RoleBinding(
-        provider="qwen3-coder-local",
+        provider="qwen2.5-coder-3b-local",
         instructions="Run or inspect tests and report reproducible evidence; do not modify implementation.",
     ),
 }
