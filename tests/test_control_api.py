@@ -57,7 +57,7 @@ class ControlApiTests(unittest.TestCase):
         self._wait_for_gate(controller, "human_gate_1")
         snapshot = controller.snapshot()
         self.assertEqual(snapshot["status"], "awaiting_human")
-        self.assertEqual(snapshot["feedback"][0]["feedback"], "Change the architecture.")
+        self.assertEqual(snapshot["feedback"][-1]["feedback"], "Change the architecture.")
 
     def test_http_health_and_decision(self) -> None:
         controller = WorkflowController(
