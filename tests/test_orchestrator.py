@@ -121,7 +121,7 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             human_gate=lambda stage, prompt, context: (
                 (HumanDecision.APPROVE, "")
                 if stage is Stage.GATE_1
-                else (HumanDecision.REQUEST_CHANGES, "Fix it again."),
+                else (HumanDecision.REQUEST_CHANGES, "Fix it again.")
             ),
         )
         self.assertEqual(result.stage, Stage.HALTED)
