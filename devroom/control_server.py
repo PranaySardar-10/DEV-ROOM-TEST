@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 
 from .codex_provider import CodexCliProvider
@@ -67,7 +68,8 @@ def main() -> None:
     print("Press Ctrl+C to stop.")
 
     try:
-        controller._thread.join()  # Keep the small bootstrap process alive until the workflow exits.
+        while controller.snapshot()["status"] not in {"complete", "halted", "error"}:
+            time.sleep(0.25)
     except KeyboardInterrupt:
         pass
     finally:
