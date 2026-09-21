@@ -56,7 +56,7 @@ class MockProvider:
 
     def execute(self, task: AgentTask) -> AgentResult:
         self.calls.append(task)
-        return AgentResult(role=task.role, summary=f"Mock {task.role} completed: {task.goal}")
+        return AgentResult(role=task.role, summary=f"Mock {task.role} completed: {task.goal}", artifacts=("mock-artifact",))
 
 
 @dataclass
@@ -106,8 +106,19 @@ class DevRoomOrchestrator:
 
         history: list[Stage] = []
         results: list[AgentResult] = []
+        persisted_decision: HumanDecision | None = None
+        persisted_feedback: str | None = None
 
-        def persist(stage: Stage, halted_reason: str | None = None) -> None:
+        def persist(
+            stage: Stage,
+            halted_reason: str | None = None,
+            last_decision: HumanDecision | None = None,
+            last_feedback: str | None = None,
+        ) -> None:
+            nonlocal persisted_decision, persisted_feedback
+            if last_decision is not None:
+                persisted_decision = last_decision
+                persisted_feedback = last_feedback
             if self.state_writer is None:
                 return
             self.state_writer.write(
@@ -122,6 +133,10 @@ class DevRoomOrchestrator:
                     for result in results
                 ),
                 halted_reason=halted_reason,
+                last_decision=(
+                    persisted_decision.value if persisted_decision is not None else None
+                ),
+                last_feedback=persisted_feedback,
             )
 
         def call(stage: Stage, role: str, task_goal: str, context: dict[str, str] | None = None) -> AgentResult:
@@ -142,7 +157,10 @@ class DevRoomOrchestrator:
             decision, feedback = human_gate(stage, prompt, context)
             if not isinstance(decision, HumanDecision):
                 decision = HumanDecision(decision)
-            return decision, feedback.strip()
+            feedback = feedback.strip()
+            # Persist the actual decision after the human callback returns.
+            persist(stage, last_decision=decision, last_feedback=feedback)
+            return decision, feedback
 
         lead = call(Stage.LEAD, "Lead", goal)
         architecture = call(
@@ -178,15 +196,25 @@ class DevRoomOrchestrator:
 
         implementation_feedback = ""
         for cycle in range(max_feedback_cycles + 1):
-            implementer_context = {"architecture_summary": architecture.summary}
+            implementer_context = {
+                "architecture_summary": architecture.summary,
+                "gate_1_decision": HumanDecision.APPROVE.value,
+            }
             if implementation_feedback:
                 implementer_context["human_feedback"] = implementation_feedback
-            call(
+            implementation = call(
                 Stage.IMPLEMENTER,
                 "Implementer",
                 f"Implement the approved design for: {goal}",
                 implementer_context,
             )
+            if not implementation.artifacts:
+                reason = (
+                    "Implementer completed without producing implementation artifacts. "
+                    "Reviewer and QA are blocked until an implementation is actually submitted."
+                )
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
 
             review = call(
                 Stage.REVIEWER,

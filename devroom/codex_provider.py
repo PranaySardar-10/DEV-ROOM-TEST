@@ -12,7 +12,6 @@ from .sandbox_policy import READ_ONLY, WORKSPACE_WRITE, RoleSandboxPolicy
 @dataclass(frozen=True)
 class CodexCliConfig:
     command: str = "codex"
-    # Legacy override may only tighten a role's effective privilege.
     sandbox: str | None = None
     ephemeral: bool = True
     timeout_seconds: int = 3600
@@ -38,14 +37,24 @@ class CodexCliProvider:
             raise RuntimeError(f"Codex CLI not found: {self.config.command!r}.")
 
         sandbox = self._effective_sandbox(task)
-        completed = subprocess.run(
-            self._build_command(task, str(workspace), sandbox),
-            cwd=str(workspace),
-            capture_output=True,
-            text=True,
-            timeout=self.config.timeout_seconds,
-            check=False,
-        )
+        before = self._workspace_fingerprint(str(workspace)) if task.role == "Implementer" else None
+        print(f"[DevRoom] {task.role} → Codex started", flush=True)
+        try:
+            completed = subprocess.run(
+                self._build_command(task, str(workspace), sandbox),
+                cwd=str(workspace),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.config.timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"Codex execution timed out after {self.config.timeout_seconds}s for role {task.role!r}."
+            ) from exc
+        print(f"[DevRoom] {task.role} → Codex finished (exit {completed.returncode})", flush=True)
 
         if completed.returncode != 0:
             raise RuntimeError(
@@ -55,21 +64,20 @@ class CodexCliProvider:
         summary = self._extract_final_message(completed.stdout)
         if not summary:
             raise RuntimeError("Codex completed without a final agent message.")
-        return AgentResult(role=task.role, summary=summary)
+        artifacts = self._implementation_artifacts(str(workspace), before) if task.role == "Implementer" else ()
+        return AgentResult(role=task.role, summary=summary, artifacts=artifacts)
 
     def _effective_sandbox(self, task: AgentTask) -> str:
         maximum = self.sandbox_policy.sandbox_for(task.role)
         requested = task.context.get("sandbox", maximum)
         if requested not in {READ_ONLY, WORKSPACE_WRITE}:
             raise ValueError(f"Unsupported sandbox policy: {requested}")
-
         if self.config.sandbox is not None:
             if self.config.sandbox not in {READ_ONLY, WORKSPACE_WRITE}:
                 raise ValueError(f"Unsupported legacy sandbox policy: {self.config.sandbox}")
             if maximum == READ_ONLY and self.config.sandbox == WORKSPACE_WRITE:
                 raise PermissionError(f"Legacy sandbox override cannot elevate role {task.role!r}.")
             requested = self._stricter_sandbox(requested, self.config.sandbox)
-
         if maximum == READ_ONLY and requested == WORKSPACE_WRITE:
             raise PermissionError(f"Role {task.role!r} cannot execute with workspace-write.")
         return requested
@@ -81,13 +89,8 @@ class CodexCliProvider:
     def _build_command(self, task: AgentTask, workspace: str, sandbox: str | None = None) -> list[str]:
         effective = sandbox or self._effective_sandbox(task)
         return [
-            self.config.command,
-            "exec",
-            "--json",
-            "--cd",
-            workspace,
-            "--sandbox",
-            effective,
+            self.config.command, "exec", "--json", "--cd", workspace,
+            "--sandbox", effective,
             *(["--ephemeral"] if self.config.ephemeral else []),
             self._build_prompt(task),
         ]
@@ -124,6 +127,40 @@ class CodexCliProvider:
             if item.get("type") == "agent_message" and item.get("text"):
                 final_messages.append(str(item["text"]))
         return final_messages[-1].strip() if final_messages else ""
+
+    @staticmethod
+    def _workspace_fingerprint(workspace: str) -> tuple[str, tuple[str, ...]]:
+        try:
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=workspace, capture_output=True,
+                text=True, encoding="utf-8", errors="replace", check=True,
+            ).stdout.strip()
+            status = subprocess.run(
+                ["git", "status", "--porcelain", "--untracked-files=all"], cwd=workspace,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", check=True,
+            ).stdout.splitlines()
+        except (OSError, subprocess.CalledProcessError):
+            return ("", ())
+        return (head, tuple(line for line in status if not _ignored_runtime_path(line)))
+
+    @staticmethod
+    def _implementation_artifacts(
+        workspace: str, before: tuple[str, tuple[str, ...]] | None,
+    ) -> tuple[str, ...]:
+        after = CodexCliProvider._workspace_fingerprint(workspace)
+        if before is None or after == before:
+            return ()
+        before_head, before_status = before
+        after_head, after_status = after
+        changed = sorted(set(before_status) | set(after_status))
+        if before_head != after_head:
+            changed.append(f"git:{after_head}")
+        return tuple(dict.fromkeys(changed))
+
+
+def _ignored_runtime_path(status_line: str) -> bool:
+    path = status_line[3:].strip()
+    return path.startswith(".devroom/") or "__pycache__/" in path or path.endswith(".pyc")
 
 
 __all__ = ["CodexCliConfig", "CodexCliProvider"]

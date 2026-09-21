@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from devroom.orchestrator import DevRoomOrchestrator, HumanDecision, MockProvider, Stage
+from devroom.orchestrator import AgentResult, DevRoomOrchestrator, HumanDecision, MockProvider, Stage
 from devroom.state_store import JsonWorkflowStateStore, WorkflowStateWriter
 
 
@@ -19,6 +19,58 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         self.assertEqual(result.stage, Stage.HALTED)
         self.assertIn(Stage.GATE_1, result.history)
         self.assertEqual(len(provider.calls), 2)
+
+    def test_gate_decision_persists_after_callback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-callback")
+            provider = MockProvider()
+            seen = []
+
+            def gate(stage, prompt, context):
+                persisted = JsonWorkflowStateStore(path).load("workflow-callback")
+                seen.append((stage, persisted.last_decision))
+                return (
+                    (HumanDecision.APPROVE, "")
+                    if stage is Stage.GATE_1
+                    else (HumanDecision.HALT, "stop")
+                )
+
+            result = DevRoomOrchestrator(
+                provider,
+                state_writer=writer,
+            ).run(
+                "Persist callback ordering",
+                human_gate=gate,
+            )
+            final_state = JsonWorkflowStateStore(path).load("workflow-callback")
+            self.assertEqual(result.stage, Stage.HALTED)
+            self.assertEqual(
+                seen,
+                [
+                    (Stage.GATE_1, None),
+                    (Stage.GATE_2, HumanDecision.APPROVE.value),
+                ],
+            )
+            self.assertEqual(final_state.last_decision, HumanDecision.HALT.value)
+            self.assertEqual(final_state.last_feedback, "stop")
+
+    def test_missing_implementation_artifacts_halt_before_review(self) -> None:
+        class EmptyImplementerProvider(MockProvider):
+            def execute(self, task):
+                self.calls.append(task)
+                if task.role == "Implementer":
+                    return AgentResult(role=task.role, summary="No implementation was produced.")
+                return AgentResult(role=task.role, summary=f"Mock {task.role} completed.", artifacts=("mock",))
+
+        provider = EmptyImplementerProvider()
+        result = DevRoomOrchestrator(provider).run(
+            "Require implementation proof",
+            human_gate=self.approve_all,
+        )
+        self.assertEqual(result.stage, Stage.HALTED)
+        self.assertIn("implementation artifacts", result.halted_reason or "")
+        self.assertEqual([task.role for task in provider.calls], ["Lead", "Architect", "Implementer"])
 
     def test_full_workflow_reaches_complete_after_human_approval(self) -> None:
         provider = MockProvider()
