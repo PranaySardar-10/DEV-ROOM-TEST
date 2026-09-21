@@ -31,12 +31,11 @@ class CodexCliProvider:
         self.sandbox_policy = sandbox_policy or RoleSandboxPolicy()
 
     def execute(self, task: AgentTask) -> AgentResult:
-        if shutil.which(self.config.command) is None:
-            raise RuntimeError(f"Codex CLI not found: {self.config.command!r}.")
-
         workspace = task.context.get("workspace")
         if not workspace:
             raise ValueError("Codex tasks require an explicit 'workspace' context value.")
+        if shutil.which(self.config.command) is None:
+            raise RuntimeError(f"Codex CLI not found: {self.config.command!r}.")
 
         sandbox = self._effective_sandbox(task)
         completed = subprocess.run(
@@ -67,6 +66,8 @@ class CodexCliProvider:
         if self.config.sandbox is not None:
             if self.config.sandbox not in {READ_ONLY, WORKSPACE_WRITE}:
                 raise ValueError(f"Unsupported legacy sandbox policy: {self.config.sandbox}")
+            if maximum == READ_ONLY and self.config.sandbox == WORKSPACE_WRITE:
+                raise PermissionError(f"Legacy sandbox override cannot elevate role {task.role!r}.")
             requested = self._stricter_sandbox(requested, self.config.sandbox)
 
         if maximum == READ_ONLY and requested == WORKSPACE_WRITE:
