@@ -25,26 +25,29 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             path = Path(directory) / "workflow.json"
             writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-callback")
             provider = MockProvider()
+            seen = []
 
             def gate(stage, prompt, context):
-                state = JsonWorkflowStateStore(path).load("workflow-callback")
-                self.assertIsNone(state.last_decision)
+                persisted = JsonWorkflowStateStore(path).load("workflow-callback")
+                seen.append((stage, persisted.last_decision))
                 return (HumanDecision.APPROVE, "") if stage is Stage.GATE_1 else (HumanDecision.HALT, "stop")
 
             result = DevRoomOrchestrator(provider, state_writer=writer).run(
                 "Persist callback ordering",
                 human_gate=gate,
             )
-            persisted = JsonWorkflowStateStore(path).load("workflow-callback")
+            final_state = JsonWorkflowStateStore(path).load("workflow-callback")
             self.assertEqual(result.stage, Stage.HALTED)
-            self.assertEqual(persisted.last_decision, HumanDecision.HALT.value)
-            self.assertEqual(persisted.last_feedback, "stop")
+            self.assertEqual(
+                seen,
+                [
+                    (Stage.GATE_1, None),
+                    (Stage.GATE_2, HumanDecision.APPROVE.value),
+                ],
+            )
+            self.assertEqual(final_state.last_decision, HumanDecision.HALT.value)
+            self.assertEqual(final_state.last_feedback, "stop")
 
-    def test_missing_implementation_artifacts_halt_before_review(self) -> None:
-        class EmptyImplementerProvider(MockProvider):
-            def execute(self, task):
-                self.calls.append(task)
-                if task.role == "Implementer":
                     return AgentResult(role=task.role, summary="No implementation was produced.")
                 return AgentResult(role=task.role, summary=f"Mock {task.role} completed.", artifacts=("mock",))
 
