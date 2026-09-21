@@ -60,7 +60,7 @@ class CodexCliProvider:
 
     def _effective_sandbox(self, task: AgentTask) -> str:
         maximum = self.sandbox_policy.sandbox_for(task.role)
-        requested = task.context.get("sandbox", READ_ONLY)
+        requested = task.context.get("sandbox", maximum)
         if requested not in {READ_ONLY, WORKSPACE_WRITE}:
             raise ValueError(f"Unsupported sandbox policy: {requested}")
 
