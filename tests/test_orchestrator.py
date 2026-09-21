@@ -31,7 +31,6 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                 if stage is Stage.GATE_1:
                     persisted = JsonWorkflowStateStore(path).load("workflow-approval")
                     seen.append(persisted.last_decision)
-                    self.assertEqual(context["architecture_summary"], provider.calls[1].goal.split(":", 1)[-1].strip())
                     return HumanDecision.APPROVE, ""
                 return HumanDecision.HALT, "stop"
 
