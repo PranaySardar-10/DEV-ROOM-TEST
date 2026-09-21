@@ -1,7 +1,8 @@
 import unittest
 
-from devroom.orchestrator import AgentTask, AgentResult
+from devroom.orchestrator import AgentResult, AgentTask
 from devroom.provider_router import ProviderRouter, RoleBinding
+from devroom.sandbox_policy import READ_ONLY, WORKSPACE_WRITE
 
 
 class RecordingProvider:
@@ -19,14 +20,8 @@ class ProviderRouterTests(unittest.TestCase):
         router = ProviderRouter(
             {"codex": codex},
             {
-                "Implementer": RoleBinding(
-                    provider="codex",
-                    instructions="Implement only the approved scope.",
-                ),
-                "Reviewer": RoleBinding(
-                    provider="codex",
-                    instructions="Review independently from fresh context.",
-                ),
+                "Implementer": RoleBinding("codex", "Implement only the approved scope.", WORKSPACE_WRITE),
+                "Reviewer": RoleBinding("codex", "Review independently from fresh context."),
             },
         )
 
@@ -34,17 +29,30 @@ class ProviderRouterTests(unittest.TestCase):
         router.execute(AgentTask(role="Reviewer", goal="Review feature X"))
 
         self.assertEqual([task.role for task in codex.tasks], ["Implementer", "Reviewer"])
+        self.assertEqual(codex.tasks[0].context["sandbox"], WORKSPACE_WRITE)
+        self.assertEqual(codex.tasks[1].context["sandbox"], READ_ONLY)
         self.assertNotEqual(
             codex.tasks[0].context["role_instructions"],
             codex.tasks[1].context["role_instructions"],
         )
-        self.assertEqual(codex.tasks[0].context["provider"], "codex")
-        self.assertEqual(codex.tasks[1].context["provider"], "codex")
+
+    def test_read_only_role_cannot_be_escalated(self) -> None:
+        router = ProviderRouter(
+            {"codex": RecordingProvider()},
+            {"Reviewer": RoleBinding("codex", "Review only.")},
+        )
+        with self.assertRaises(PermissionError):
+            router.execute(
+                AgentTask(
+                    role="Reviewer",
+                    goal="Review",
+                    context={"sandbox": WORKSPACE_WRITE},
+                )
+            )
 
     def test_missing_role_binding_fails_loudly(self) -> None:
-        router = ProviderRouter({}, {})
         with self.assertRaises(KeyError):
-            router.execute(AgentTask(role="Unknown", goal="Do something"))
+            ProviderRouter({}, {}).execute(AgentTask(role="Unknown", goal="Do something"))
 
 
 if __name__ == "__main__":
