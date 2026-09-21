@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from devroom.orchestrator import DevRoomOrchestrator, HumanDecision, MockProvider, Stage
+from devroom.orchestrator import AgentResult, DevRoomOrchestrator, HumanDecision, MockProvider, Stage
 from devroom.state_store import JsonWorkflowStateStore, WorkflowStateWriter
 
 
@@ -29,9 +29,9 @@ class DevRoomOrchestratorTests(unittest.TestCase):
 
             def gate(stage, prompt, context):
                 if stage is Stage.GATE_1:
-                    persisted = JsonWorkflowStateStore(path).load("workflow-approval")
-                    seen.append(persisted.last_decision)
                     return HumanDecision.APPROVE, ""
+                persisted = JsonWorkflowStateStore(path).load("workflow-approval")
+                seen.append(persisted.last_decision)
                 return HumanDecision.HALT, "stop"
 
             result = DevRoomOrchestrator(provider, state_writer=writer).run(
@@ -46,7 +46,6 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             def execute(self, task):
                 self.calls.append(task)
                 if task.role == "Implementer":
-                    from devroom.orchestrator import AgentResult
                     return AgentResult(role=task.role, summary="No implementation was produced.")
                 return AgentResult(role=task.role, summary=f"Mock {task.role} completed.", artifacts=("mock",))
 
