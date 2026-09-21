@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol
+from typing import Mapping, Protocol
 
 
 class Stage(str, Enum):
@@ -45,11 +45,7 @@ class MockProvider:
 
     def execute(self, task: AgentTask) -> AgentResult:
         self.calls.append(task)
-        return AgentResult(
-            role=task.role,
-            summary=f"Mock {task.role} completed: {task.goal}",
-            artifacts=(),
-        )
+        return AgentResult(role=task.role, summary=f"Mock {task.role} completed: {task.goal}")
 
 
 @dataclass
@@ -66,23 +62,39 @@ class DevRoomOrchestrator:
     def __init__(self, provider: AgentProvider) -> None:
         self.provider = provider
 
+    @classmethod
+    def with_provider_router(
+        cls,
+        providers: Mapping[str, AgentProvider],
+        bindings: Mapping[str, object] | None = None,
+    ) -> "DevRoomOrchestrator":
+        from .provider_router import DEFAULT_ROLE_BINDINGS, ProviderRouter
+
+        return cls(ProviderRouter(providers, bindings or DEFAULT_ROLE_BINDINGS))
+
     def run(
         self,
         goal: str,
         *,
+        workspace: str | None = None,
         approve_gate_1: bool = True,
         approve_gate_2: bool = True,
     ) -> WorkflowResult:
         if not goal.strip():
             raise ValueError("goal must not be empty")
+        if workspace is not None and not str(workspace).strip():
+            raise ValueError("workspace must not be blank")
 
         history: list[Stage] = []
         results: list[AgentResult] = []
 
         def call(stage: Stage, role: str, task_goal: str, context: dict[str, str] | None = None) -> AgentResult:
             history.append(stage)
+            task_context = dict(context or {})
+            if workspace is not None:
+                task_context["workspace"] = str(workspace)
             result = self.provider.execute(
-                AgentTask(role=role, goal=task_goal, context=context or {})
+                AgentTask(role=role, goal=task_goal, context=task_context)
             )
             results.append(result)
             return result
@@ -97,14 +109,9 @@ class DevRoomOrchestrator:
 
         history.append(Stage.GATE_1)
         if not approve_gate_1:
-            return WorkflowResult(
-                Stage.HALTED,
-                history,
-                results,
-                "Human Gate 1 was not approved.",
-            )
+            return WorkflowResult(Stage.HALTED, history, results, "Human Gate 1 was not approved.")
 
-        implementation = call(
+        call(
             Stage.IMPLEMENTER,
             "Implementer",
             f"Implement the approved design for: {goal}",
@@ -115,7 +122,7 @@ class DevRoomOrchestrator:
             Stage.REVIEWER,
             "Reviewer",
             f"Independently review the implementation for: {goal}",
-            {"implementation_summary": implementation.summary},
+            {"architecture_summary": architecture.summary},
         )
 
         qa = call(
@@ -125,35 +132,22 @@ class DevRoomOrchestrator:
             {"review_summary": review.summary},
         )
 
-        report = call(
+        call(
             Stage.LEAD_REPORT,
             "Lead",
             f"Prepare the integration report for: {goal}",
-            {
-                "review_summary": review.summary,
-                "qa_summary": qa.summary,
-            },
+            {"review_summary": review.summary, "qa_summary": qa.summary},
         )
 
         history.append(Stage.GATE_2)
         if not approve_gate_2:
-            return WorkflowResult(
-                Stage.HALTED,
-                history,
-                results,
-                "Human Gate 2 was not approved.",
-            )
+            return WorkflowResult(Stage.HALTED, history, results, "Human Gate 2 was not approved.")
 
         history.append(Stage.COMPLETE)
         return WorkflowResult(Stage.COMPLETE, history, results)
 
 
 __all__ = [
-    "AgentProvider",
-    "AgentResult",
-    "AgentTask",
-    "DevRoomOrchestrator",
-    "MockProvider",
-    "Stage",
-    "WorkflowResult",
+    "AgentProvider", "AgentResult", "AgentTask", "DevRoomOrchestrator",
+    "MockProvider", "Stage", "WorkflowResult",
 ]
