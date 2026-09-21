@@ -56,7 +56,7 @@ class MockProvider:
 
     def execute(self, task: AgentTask) -> AgentResult:
         self.calls.append(task)
-        return AgentResult(role=task.role, summary=f"Mock {task.role} completed: {task.goal}")
+        return AgentResult(role=task.role, summary=f"Mock {task.role} completed: {task.goal}", artifacts=("mock-artifact",))
 
 
 @dataclass
