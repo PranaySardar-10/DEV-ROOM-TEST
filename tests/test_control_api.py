@@ -28,6 +28,7 @@ class ControlApiTests(unittest.TestCase):
         snapshot = controller.snapshot()
         self.assertEqual(snapshot["status"], "awaiting_human")
         self.assertEqual(snapshot["stage"], "human_gate_1")
+        self.assertTrue(any(item["decision"] == "awaiting" for item in snapshot["feedback"]))
 
         controller.decide(HumanDecision.APPROVE)
         self._wait_for_gate(controller, "human_gate_2")
