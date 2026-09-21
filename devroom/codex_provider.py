@@ -38,14 +38,23 @@ class CodexCliProvider:
             raise RuntimeError(f"Codex CLI not found: {self.config.command!r}.")
 
         sandbox = self._effective_sandbox(task)
-        completed = subprocess.run(
-            self._build_command(task, str(workspace), sandbox),
-            cwd=str(workspace),
-            capture_output=True,
-            text=True,
-            timeout=self.config.timeout_seconds,
-            check=False,
-        )
+        print(f"[DevRoom] {task.role} → Codex started", flush=True)
+        try:
+            completed = subprocess.run(
+                self._build_command(task, str(workspace), sandbox),
+                cwd=str(workspace),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.config.timeout_seconds,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"Codex execution timed out after {self.config.timeout_seconds}s for role {task.role!r}."
+            ) from exc
+        print(f"[DevRoom] {task.role} → Codex finished (exit {completed.returncode})", flush=True)
 
         if completed.returncode != 0:
             raise RuntimeError(
