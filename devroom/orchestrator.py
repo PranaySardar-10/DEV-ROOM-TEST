@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, Mapping, Protocol
 
+from .state_store import WorkflowStateWriter
+
 
 class Stage(str, Enum):
     LEAD = "lead"
@@ -66,20 +68,26 @@ class WorkflowResult:
 
 
 class DevRoomOrchestrator:
-    """Provider-neutral state machine with explicit human gates and feedback loops."""
+    """Provider-neutral state machine with explicit gates, feedback, and durable snapshots."""
 
-    def __init__(self, provider: AgentProvider) -> None:
+    def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None) -> None:
         self.provider = provider
+        self.state_writer = state_writer
 
     @classmethod
     def with_provider_router(
         cls,
         providers: Mapping[str, AgentProvider],
         bindings: Mapping[str, object] | None = None,
+        *,
+        state_writer: WorkflowStateWriter | None = None,
     ) -> "DevRoomOrchestrator":
         from .provider_router import DEFAULT_ROLE_BINDINGS, ProviderRouter
 
-        return cls(ProviderRouter(providers, bindings or DEFAULT_ROLE_BINDINGS))
+        return cls(
+            ProviderRouter(providers, bindings or DEFAULT_ROLE_BINDINGS),
+            state_writer=state_writer,
+        )
 
     def run(
         self,
@@ -99,6 +107,23 @@ class DevRoomOrchestrator:
         history: list[Stage] = []
         results: list[AgentResult] = []
 
+        def persist(stage: Stage, halted_reason: str | None = None) -> None:
+            if self.state_writer is None:
+                return
+            self.state_writer.write(
+                stage=stage.value,
+                history=(item.value for item in history),
+                results=(
+                    {
+                        "role": result.role,
+                        "summary": result.summary,
+                        "artifacts": list(result.artifacts),
+                    }
+                    for result in results
+                ),
+                halted_reason=halted_reason,
+            )
+
         def call(stage: Stage, role: str, task_goal: str, context: dict[str, str] | None = None) -> AgentResult:
             history.append(stage)
             task_context = dict(context or {})
@@ -106,10 +131,12 @@ class DevRoomOrchestrator:
                 task_context["workspace"] = str(workspace)
             result = self.provider.execute(AgentTask(role=role, goal=task_goal, context=task_context))
             results.append(result)
+            persist(stage)
             return result
 
         def gate(stage: Stage, prompt: str, context: Mapping[str, str]) -> tuple[HumanDecision, str]:
             history.append(stage)
+            persist(stage)
             if human_gate is None:
                 return HumanDecision.HALT, f"{stage.value} requires explicit human decision."
             decision, feedback = human_gate(stage, prompt, context)
@@ -146,6 +173,7 @@ class DevRoomOrchestrator:
             )
         if decision is not HumanDecision.APPROVE:
             reason = feedback or f"{Stage.GATE_1.value} was not approved."
+            persist(Stage.HALTED, reason)
             return WorkflowResult(Stage.HALTED, history, results, reason)
 
         implementation_feedback = ""
@@ -190,19 +218,21 @@ class DevRoomOrchestrator:
             )
             if decision is HumanDecision.APPROVE:
                 history.append(Stage.COMPLETE)
+                persist(Stage.COMPLETE)
                 return WorkflowResult(Stage.COMPLETE, history, results)
             if decision is HumanDecision.HALT:
-                return WorkflowResult(Stage.HALTED, history, results, feedback or "Human Gate 2 halted the workflow.")
+                reason = feedback or "Human Gate 2 halted the workflow."
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
             if cycle >= max_feedback_cycles:
-                return WorkflowResult(
-                    Stage.HALTED,
-                    history,
-                    results,
-                    "Maximum human feedback cycles reached.",
-                )
+                reason = "Maximum human feedback cycles reached."
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
             implementation_feedback = feedback or "Human requested implementation changes."
 
-        return WorkflowResult(Stage.HALTED, history, results, "Workflow ended without approval.")
+        reason = "Workflow ended without approval."
+        persist(Stage.HALTED, reason)
+        return WorkflowResult(Stage.HALTED, history, results, reason)
 
 
 __all__ = [
