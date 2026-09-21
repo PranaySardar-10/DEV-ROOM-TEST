@@ -25,6 +25,6 @@ Role-specific sandboxing remains part of the provider configuration:
 - Implementation tasks may use `workspace-write` only after Human Gate 1 and only inside an isolated task workspace.
 - `danger-full-access` is not part of the normal DevRoom workflow.
 
-OpenAI documents `codex exec` as the non-interactive interface for scripts/CI, recommends explicit sandbox permissions, and documents `--cd`/workspace targeting for Codex execution. citeturn0search5turn0search1
+See the OpenAI Codex documentation for non-interactive execution and sandbox permissions.
 
 Do not place Codex authentication tokens or API keys in the repository.
