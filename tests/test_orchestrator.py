@@ -119,9 +119,9 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             workspace=r"D:\DEV_ROOM_TEST",
             max_feedback_cycles=1,
             human_gate=lambda stage, prompt, context: (
-                ((HumanDecision.APPROVE, "")
-                 if stage is Stage.GATE_1
-                 else (HumanDecision.REQUEST_CHANGES, "Fix it again.")),
+                (HumanDecision.APPROVE, "")
+                if stage is Stage.GATE_1
+                else (HumanDecision.REQUEST_CHANGES, "Fix it again."),
             ),
         )
         self.assertEqual(result.stage, Stage.HALTED)
