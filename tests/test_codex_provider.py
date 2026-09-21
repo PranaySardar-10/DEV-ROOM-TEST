@@ -39,6 +39,11 @@ class CodexCliProviderTests(unittest.TestCase):
         command = CodexCliProvider()._build_command(implementer, r"D:\DEV_ROOM_TEST")
         self.assertEqual(command[5:7], ["--sandbox", WORKSPACE_WRITE])
 
+    def test_direct_implementer_defaults_to_workspace_write(self) -> None:
+        provider = CodexCliProvider()
+        task = AgentTask(role="Implementer", goal="Implement", context={"workspace": r"D:\\DEV_ROOM_TEST"})
+        self.assertEqual(provider._effective_sandbox(task), WORKSPACE_WRITE)
+
     def test_read_only_role_rejects_workspace_write(self) -> None:
         provider = CodexCliProvider()
         task = AgentTask(
