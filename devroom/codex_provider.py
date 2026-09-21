@@ -6,42 +6,41 @@ import subprocess
 from dataclasses import dataclass
 
 from .orchestrator import AgentProvider, AgentResult, AgentTask
+from .sandbox_policy import READ_ONLY, WORKSPACE_WRITE, RoleSandboxPolicy
 
 
 @dataclass(frozen=True)
 class CodexCliConfig:
     command: str = "codex"
-    sandbox: str = "workspace-write"
+    # Legacy override may only tighten a role's effective privilege.
+    sandbox: str | None = None
     ephemeral: bool = True
     timeout_seconds: int = 3600
 
 
 class CodexCliProvider:
-    """Run a DevRoom role through the installed Codex CLI.
+    """Run a DevRoom role through the installed Codex CLI."""
 
-    DevRoom owns role/context routing while Codex owns model execution, tool use,
-    and its sandbox. The target workspace is passed explicitly to Codex.
-    """
-
-    def __init__(self, config: CodexCliConfig | None = None) -> None:
+    def __init__(
+        self,
+        config: CodexCliConfig | None = None,
+        *,
+        sandbox_policy: RoleSandboxPolicy | None = None,
+    ) -> None:
         self.config = config or CodexCliConfig()
+        self.sandbox_policy = sandbox_policy or RoleSandboxPolicy()
 
     def execute(self, task: AgentTask) -> AgentResult:
         if shutil.which(self.config.command) is None:
-            raise RuntimeError(
-                f"Codex CLI not found: {self.config.command!r}. "
-                "Install/login to Codex before enabling this provider."
-            )
+            raise RuntimeError(f"Codex CLI not found: {self.config.command!r}.")
 
         workspace = task.context.get("workspace")
         if not workspace:
-            raise ValueError(
-                "Codex tasks require an explicit 'workspace' context value."
-            )
+            raise ValueError("Codex tasks require an explicit 'workspace' context value.")
 
-        command = self._build_command(task, str(workspace))
+        sandbox = self._effective_sandbox(task)
         completed = subprocess.run(
-            command,
+            self._build_command(task, str(workspace), sandbox),
             cwd=str(workspace),
             capture_output=True,
             text=True,
@@ -51,41 +50,54 @@ class CodexCliProvider:
 
         if completed.returncode != 0:
             raise RuntimeError(
-                f"Codex execution failed with exit code {completed.returncode}: "
-                f"{completed.stderr.strip()}"
+                f"Codex execution failed with exit code {completed.returncode}: {completed.stderr.strip()}"
             )
 
         summary = self._extract_final_message(completed.stdout)
         if not summary:
             raise RuntimeError("Codex completed without a final agent message.")
-
         return AgentResult(role=task.role, summary=summary)
 
-    def _build_command(self, task: AgentTask, workspace: str) -> list[str]:
-        command = [
+    def _effective_sandbox(self, task: AgentTask) -> str:
+        maximum = self.sandbox_policy.sandbox_for(task.role)
+        requested = task.context.get("sandbox", READ_ONLY)
+        if requested not in {READ_ONLY, WORKSPACE_WRITE}:
+            raise ValueError(f"Unsupported sandbox policy: {requested}")
+
+        if self.config.sandbox is not None:
+            if self.config.sandbox not in {READ_ONLY, WORKSPACE_WRITE}:
+                raise ValueError(f"Unsupported legacy sandbox policy: {self.config.sandbox}")
+            requested = self._stricter_sandbox(requested, self.config.sandbox)
+
+        if maximum == READ_ONLY and requested == WORKSPACE_WRITE:
+            raise PermissionError(f"Role {task.role!r} cannot execute with workspace-write.")
+        return requested
+
+    @staticmethod
+    def _stricter_sandbox(left: str, right: str) -> str:
+        return READ_ONLY if READ_ONLY in {left, right} else WORKSPACE_WRITE
+
+    def _build_command(self, task: AgentTask, workspace: str, sandbox: str | None = None) -> list[str]:
+        effective = sandbox or self._effective_sandbox(task)
+        return [
             self.config.command,
             "exec",
             "--json",
             "--cd",
             workspace,
             "--sandbox",
-            self.config.sandbox,
+            effective,
+            *(["--ephemeral"] if self.config.ephemeral else []),
+            self._build_prompt(task),
         ]
-        if self.config.ephemeral:
-            command.append("--ephemeral")
-        command.append(self._build_prompt(task))
-        return command
 
     @staticmethod
     def _build_prompt(task: AgentTask) -> str:
         instructions = task.context.get("role_instructions", "")
         context_lines = [
-            f"{key}: {value}"
-            for key, value in task.context.items()
-            if key != "role_instructions"
+            f"{key}: {value}" for key, value in task.context.items() if key != "role_instructions"
         ]
         context = "\n".join(context_lines)
-
         return (
             f"You are the DevRoom {task.role} agent.\n"
             f"Role instructions:\n{instructions}\n\n"
@@ -98,7 +110,6 @@ class CodexCliProvider:
     @staticmethod
     def _extract_final_message(jsonl: str) -> str:
         final_messages: list[str] = []
-
         for line in jsonl.splitlines():
             if not line.strip():
                 continue
@@ -106,14 +117,11 @@ class CodexCliProvider:
                 event = json.loads(line)
             except json.JSONDecodeError:
                 continue
-
             if event.get("type") != "item.completed":
                 continue
-
             item = event.get("item") or {}
             if item.get("type") == "agent_message" and item.get("text"):
                 final_messages.append(str(item["text"]))
-
         return final_messages[-1].strip() if final_messages else ""
 
 
