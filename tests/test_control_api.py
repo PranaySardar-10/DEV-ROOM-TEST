@@ -1,5 +1,4 @@
 import json
-import threading
 import time
 import unittest
 from urllib.request import Request, urlopen
@@ -10,11 +9,12 @@ from devroom.orchestrator import HumanDecision, MockProvider
 
 class ControlApiTests(unittest.TestCase):
     def _wait_for_gate(self, controller: WorkflowController, gate: str) -> None:
-        for _ in range(100):
-            if controller.snapshot()["stage"] == gate:
+        for _ in range(200):
+            snapshot = controller.snapshot()
+            if snapshot["stage"] == gate and snapshot["status"] == "awaiting_human":
                 return
             time.sleep(0.01)
-        self.fail(f"workflow did not reach {gate}")
+        self.fail(f"workflow did not reach active {gate}")
 
     def test_controller_exposes_gate_and_accepts_decision(self) -> None:
         controller = WorkflowController(
@@ -34,7 +34,7 @@ class ControlApiTests(unittest.TestCase):
         self.assertEqual(controller.snapshot()["status"], "awaiting_human")
 
         controller.decide(HumanDecision.APPROVE)
-        for _ in range(100):
+        for _ in range(200):
             if controller.snapshot()["status"] == "complete":
                 break
             time.sleep(0.01)
@@ -54,8 +54,9 @@ class ControlApiTests(unittest.TestCase):
 
         controller.decide(HumanDecision.REQUEST_CHANGES, "Change the architecture.")
         self._wait_for_gate(controller, "human_gate_1")
-        self.assertEqual(controller.snapshot()["status"], "awaiting_human")
-        self.assertEqual(controller.snapshot()["feedback"][0]["feedback"], "Change the architecture.")
+        snapshot = controller.snapshot()
+        self.assertEqual(snapshot["status"], "awaiting_human")
+        self.assertEqual(snapshot["feedback"][0]["feedback"], "Change the architecture.")
 
     def test_http_health_and_decision(self) -> None:
         controller = WorkflowController(
