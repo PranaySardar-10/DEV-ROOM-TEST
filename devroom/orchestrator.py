@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Mapping, Protocol
+from typing import Callable, Mapping, Protocol
 
 
 class Stage(str, Enum):
@@ -16,6 +16,12 @@ class Stage(str, Enum):
     GATE_2 = "human_gate_2"
     COMPLETE = "complete"
     HALTED = "halted"
+
+
+class HumanDecision(str, Enum):
+    APPROVE = "approve"
+    REQUEST_CHANGES = "request_changes"
+    HALT = "halt"
 
 
 @dataclass(frozen=True)
@@ -35,6 +41,9 @@ class AgentResult:
 class AgentProvider(Protocol):
     def execute(self, task: AgentTask) -> AgentResult:
         ...
+
+
+HumanGate = Callable[[Stage, str, Mapping[str, str]], tuple[HumanDecision, str]]
 
 
 class MockProvider:
@@ -57,7 +66,7 @@ class WorkflowResult:
 
 
 class DevRoomOrchestrator:
-    """Provider-neutral state machine for the first DevRoom workflow."""
+    """Provider-neutral state machine with explicit human gates and feedback loops."""
 
     def __init__(self, provider: AgentProvider) -> None:
         self.provider = provider
@@ -77,13 +86,15 @@ class DevRoomOrchestrator:
         goal: str,
         *,
         workspace: str | None = None,
-        approve_gate_1: bool = True,
-        approve_gate_2: bool = True,
+        human_gate: HumanGate | None = None,
+        max_feedback_cycles: int = 3,
     ) -> WorkflowResult:
         if not goal.strip():
             raise ValueError("goal must not be empty")
         if workspace is not None and not str(workspace).strip():
             raise ValueError("workspace must not be blank")
+        if max_feedback_cycles < 0:
+            raise ValueError("max_feedback_cycles must be >= 0")
 
         history: list[Stage] = []
         results: list[AgentResult] = []
@@ -93,11 +104,18 @@ class DevRoomOrchestrator:
             task_context = dict(context or {})
             if workspace is not None:
                 task_context["workspace"] = str(workspace)
-            result = self.provider.execute(
-                AgentTask(role=role, goal=task_goal, context=task_context)
-            )
+            result = self.provider.execute(AgentTask(role=role, goal=task_goal, context=task_context))
             results.append(result)
             return result
+
+        def gate(stage: Stage, prompt: str, context: Mapping[str, str]) -> tuple[HumanDecision, str]:
+            history.append(stage)
+            if human_gate is None:
+                return HumanDecision.HALT, f"{stage.value} requires explicit human decision."
+            decision, feedback = human_gate(stage, prompt, context)
+            if not isinstance(decision, HumanDecision):
+                decision = HumanDecision(decision)
+            return decision, feedback.strip()
 
         lead = call(Stage.LEAD, "Lead", goal)
         architecture = call(
@@ -107,47 +125,94 @@ class DevRoomOrchestrator:
             {"lead_summary": lead.summary},
         )
 
-        history.append(Stage.GATE_1)
-        if not approve_gate_1:
-            return WorkflowResult(Stage.HALTED, history, results, "Human Gate 1 was not approved.")
-
-        call(
-            Stage.IMPLEMENTER,
-            "Implementer",
-            f"Implement the approved design for: {goal}",
+        decision, feedback = gate(
+            Stage.GATE_1,
+            f"Review the architecture before implementation: {goal}",
             {"architecture_summary": architecture.summary},
         )
+        if decision is HumanDecision.REQUEST_CHANGES:
+            if not feedback:
+                feedback = "Human requested architecture changes."
+            architecture = call(
+                Stage.ARCHITECT,
+                "Architect",
+                f"Revise the implementation design for: {goal}",
+                {"previous_architecture": architecture.summary, "human_feedback": feedback},
+            )
+            decision, feedback = gate(
+                Stage.GATE_1,
+                f"Review the revised architecture before implementation: {goal}",
+                {"architecture_summary": architecture.summary, "human_feedback": feedback},
+            )
+        if decision is not HumanDecision.APPROVE:
+            reason = feedback or f"{Stage.GATE_1.value} was not approved."
+            return WorkflowResult(Stage.HALTED, history, results, reason)
 
-        review = call(
-            Stage.REVIEWER,
-            "Reviewer",
-            f"Independently review the implementation for: {goal}",
-            {"architecture_summary": architecture.summary},
-        )
+        implementation_feedback = ""
+        for cycle in range(max_feedback_cycles + 1):
+            implementer_context = {"architecture_summary": architecture.summary}
+            if implementation_feedback:
+                implementer_context["human_feedback"] = implementation_feedback
+            call(
+                Stage.IMPLEMENTER,
+                "Implementer",
+                f"Implement the approved design for: {goal}",
+                implementer_context,
+            )
 
-        qa = call(
-            Stage.QA,
-            "QA",
-            f"Validate the implementation for: {goal}",
-            {"review_summary": review.summary},
-        )
+            review = call(
+                Stage.REVIEWER,
+                "Reviewer",
+                f"Independently review the implementation for: {goal}",
+                {"architecture_summary": architecture.summary},
+            )
+            qa = call(
+                Stage.QA,
+                "QA",
+                f"Validate the implementation for: {goal}",
+                {"review_summary": review.summary},
+            )
+            report = call(
+                Stage.LEAD_REPORT,
+                "Lead",
+                f"Prepare the integration report for: {goal}",
+                {"review_summary": review.summary, "qa_summary": qa.summary},
+            )
 
-        call(
-            Stage.LEAD_REPORT,
-            "Lead",
-            f"Prepare the integration report for: {goal}",
-            {"review_summary": review.summary, "qa_summary": qa.summary},
-        )
+            decision, feedback = gate(
+                Stage.GATE_2,
+                f"Review the implementation, tests, and visual/gameplay result for: {goal}",
+                {
+                    "review_summary": review.summary,
+                    "qa_summary": qa.summary,
+                    "lead_report": report.summary,
+                },
+            )
+            if decision is HumanDecision.APPROVE:
+                history.append(Stage.COMPLETE)
+                return WorkflowResult(Stage.COMPLETE, history, results)
+            if decision is HumanDecision.HALT:
+                return WorkflowResult(Stage.HALTED, history, results, feedback or "Human Gate 2 halted the workflow.")
+            if cycle >= max_feedback_cycles:
+                return WorkflowResult(
+                    Stage.HALTED,
+                    history,
+                    results,
+                    "Maximum human feedback cycles reached.",
+                )
+            implementation_feedback = feedback or "Human requested implementation changes."
 
-        history.append(Stage.GATE_2)
-        if not approve_gate_2:
-            return WorkflowResult(Stage.HALTED, history, results, "Human Gate 2 was not approved.")
-
-        history.append(Stage.COMPLETE)
-        return WorkflowResult(Stage.COMPLETE, history, results)
+        return WorkflowResult(Stage.HALTED, history, results, "Workflow ended without approval.")
 
 
 __all__ = [
-    "AgentProvider", "AgentResult", "AgentTask", "DevRoomOrchestrator",
-    "MockProvider", "Stage", "WorkflowResult",
+    "AgentProvider",
+    "AgentResult",
+    "AgentTask",
+    "DevRoomOrchestrator",
+    "HumanDecision",
+    "HumanGate",
+    "MockProvider",
+    "Stage",
+    "WorkflowResult",
 ]
