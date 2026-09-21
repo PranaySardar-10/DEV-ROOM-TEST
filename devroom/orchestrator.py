@@ -106,6 +106,8 @@ class DevRoomOrchestrator:
 
         history: list[Stage] = []
         results: list[AgentResult] = []
+        persisted_decision: HumanDecision | None = None
+        persisted_feedback: str | None = None
 
         def persist(
             stage: Stage,
@@ -113,6 +115,10 @@ class DevRoomOrchestrator:
             last_decision: HumanDecision | None = None,
             last_feedback: str | None = None,
         ) -> None:
+            nonlocal persisted_decision, persisted_feedback
+            if last_decision is not None:
+                persisted_decision = last_decision
+                persisted_feedback = last_feedback
             if self.state_writer is None:
                 return
             self.state_writer.write(
@@ -127,8 +133,10 @@ class DevRoomOrchestrator:
                     for result in results
                 ),
                 halted_reason=halted_reason,
-                last_decision=last_decision.value if last_decision is not None else None,
-                last_feedback=last_feedback,
+                last_decision=(
+                    persisted_decision.value if persisted_decision is not None else None
+                ),
+                last_feedback=persisted_feedback,
             )
 
         def call(stage: Stage, role: str, task_goal: str, context: dict[str, str] | None = None) -> AgentResult:
