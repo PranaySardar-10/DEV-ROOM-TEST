@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from devroom.codex_provider import CodexCliConfig, CodexCliProvider
 from devroom.orchestrator import AgentTask
@@ -67,6 +68,31 @@ class CodexCliProviderTests(unittest.TestCase):
             CodexCliProvider(CodexCliConfig(sandbox=WORKSPACE_WRITE))._effective_sandbox(
                 AgentTask(role="Reviewer", goal="Review", context={"workspace": r"D:\DEV_ROOM_TEST"})
             )
+
+
+    def test_execute_uses_utf8_and_reports_timeout(self) -> None:
+        task = AgentTask(
+            role="Lead",
+            goal="Inspect the repository.",
+            context={"workspace": r"D:\DEV_ROOM_TEST"},
+        )
+        completed = type(
+            "Completed",
+            (),
+            {
+                "returncode": 0,
+                "stdout": '{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\n',
+                "stderr": "",
+            },
+        )()
+        with patch("devroom.codex_provider.shutil.which", return_value="codex"):
+            with patch("devroom.codex_provider.subprocess.run", return_value=completed) as run:
+                result = CodexCliProvider().execute(task)
+
+        self.assertEqual(result.summary, "done")
+        kwargs = run.call_args.kwargs
+        self.assertEqual(kwargs["encoding"], "utf-8")
+        self.assertEqual(kwargs["errors"], "replace")
 
     def test_execute_requires_explicit_workspace(self) -> None:
         with self.assertRaises(ValueError):
