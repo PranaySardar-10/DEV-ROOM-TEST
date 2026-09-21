@@ -1,6 +1,7 @@
 import unittest
 
 from devroom.codex_provider import CodexCliProvider
+from devroom.orchestrator import AgentTask
 
 
 class CodexCliProviderTests(unittest.TestCase):
@@ -24,6 +25,33 @@ class CodexCliProviderTests(unittest.TestCase):
             ),
             "",
         )
+
+    def test_build_command_targets_explicit_workspace(self) -> None:
+        task = AgentTask(
+            role="Reviewer",
+            goal="Inspect the current diff.",
+            context={"workspace": r"D:\DEV_ROOM_TEST", "role_instructions": "Read only."},
+        )
+        command = CodexCliProvider()._build_command(task, r"D:\DEV_ROOM_TEST")
+        self.assertEqual(
+            command[:8],
+            [
+                "codex",
+                "exec",
+                "--json",
+                "--cd",
+                r"D:\DEV_ROOM_TEST",
+                "--sandbox",
+                "workspace-write",
+                "--ephemeral",
+            ],
+        )
+
+    def test_execute_requires_explicit_workspace(self) -> None:
+        provider = CodexCliProvider()
+        task = AgentTask(role="Reviewer", goal="Inspect the repository.", context={})
+        with self.assertRaises(ValueError):
+            provider.execute(task)
 
 
 if __name__ == "__main__":
