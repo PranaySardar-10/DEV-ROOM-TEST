@@ -126,12 +126,12 @@ class WorkflowController:
             )
 
     def _gate(self, stage: Stage, prompt: str, context: Mapping[str, str]) -> tuple[HumanDecision, str]:
-        del prompt, context
         with self._condition:
             self._active_gate = stage
             self._snapshot.stage = stage.value
             self._snapshot.status = "awaiting_human"
             self._pending = None
+            self._snapshot.feedback.append({"gate": stage.value, "decision": "awaiting", "feedback": prompt})
             self._condition.notify_all()
             while self._pending is None:
                 self._condition.wait()
@@ -140,6 +140,9 @@ class WorkflowController:
             self._pending = None
             self._active_gate = None
             self._snapshot.status = "running"
+            self._snapshot.feedback.append(
+                {"gate": stage.value, "decision": decision.value, "feedback": feedback}
+            )
             if feedback:
                 self._snapshot.feedback.append(
                     {
