@@ -4,7 +4,6 @@ import json
 import shutil
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
 
 from .orchestrator import AgentProvider, AgentResult, AgentTask
 from .sandbox_policy import READ_ONLY, WORKSPACE_WRITE, RoleSandboxPolicy
