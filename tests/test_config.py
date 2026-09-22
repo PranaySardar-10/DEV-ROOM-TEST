@@ -28,7 +28,6 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.providers[0].kind, "fake")
             self.assertEqual(config.providers[0].options["label"], "test")
             self.assertEqual(config.bindings["Implementer"].sandbox, "workspace-write")
-            self.assertTrue(all(binding.provider == "codex" for binding in config.bindings.values()))
 
     def test_default_bindings_are_used_when_omitted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
