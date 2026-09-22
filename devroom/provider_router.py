@@ -17,7 +17,7 @@ class RoleBinding:
 
 
 class ProviderRouter:
-    """Routes logical roles while enforcing role-specific execution constraints."""
+    """Routes production roles while enforcing maximum role privileges."""
 
     def __init__(
         self,
@@ -56,29 +56,30 @@ class ProviderRouter:
         return provider.execute(AgentTask(role=task.role, goal=task.goal, context=context))
 
 
+# Production workforce: local Ollama providers only. Human/ChatGPT review is a
+# workflow gate, not an autonomous provider role.
 DEFAULT_ROLE_BINDINGS = {
     "Lead": RoleBinding(
-        provider="codex",
-        instructions="Coordinate the workflow; do not implement production code or merge changes.",
+        provider="gemma4-e4b-local",
+        instructions="Coordinate the production task, bound scope, and acceptance criteria. Do not modify production files.",
     ),
     "Architect": RoleBinding(
-        provider="codex",
-        instructions="Produce design, interfaces, dependencies, and acceptance criteria; do not implement production code.",
+        provider="gemma4-e4b-local",
+        instructions="Produce interfaces, dependencies, implementation boundaries, and acceptance criteria. Do not modify production files.",
+    ),
+    "Coder": RoleBinding(
+        provider="gemma4-e4b-local",
+        instructions="Produce a concrete implementation proposal for human/ChatGPT review. Do not integrate it into the production workspace.",
     ),
     "Implementer": RoleBinding(
-        provider="codex",
-        instructions="Implement only the approved task scope. Do not self-certify or merge.",
+        provider="qwen3.5-3b-local",
+        instructions="Integrate only the explicitly approved proposal within the assigned task scope. Do not self-approve.",
         sandbox=WORKSPACE_WRITE,
-    ),
-    "Reviewer": RoleBinding(
-        provider="codex",
-        instructions="Review independently from a fresh context. Inspect the diff, requirements, tests, and repository. Do not modify the implementation.",
     ),
     "QA": RoleBinding(
         provider="qwen3.5-4b-local",
-        instructions="Run or inspect tests and report reproducible evidence; do not modify implementation.",
+        instructions="Run or inspect automated validation and report reproducible evidence. Do not modify implementation.",
     ),
 }
-
 
 __all__ = ["DEFAULT_ROLE_BINDINGS", "ProviderRouter", "RoleBinding"]
