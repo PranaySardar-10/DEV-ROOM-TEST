@@ -30,7 +30,7 @@ class BootstrapConfigTests(unittest.TestCase):
                     "instructions": f"{role} instructions",
                     "sandbox": "workspace-write" if role == "Implementer" else "read-only",
                 }
-                for role in ("Lead", "Architect", "Implementer", "Reviewer", "QA")
+                for role in ("Lead", "Architect", "Coder", "Implementer", "QA")
             },
         }), encoding="utf-8")
         return path
