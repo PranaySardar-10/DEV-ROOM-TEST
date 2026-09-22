@@ -207,13 +207,13 @@ class LocalOllamaWorkspaceAgent:
                     out.append(char)
                     in_string = False
                 elif char == "\n":
-                    out.append("\\\\n")
+                    out.append("\\n")
                 elif char == "\r":
-                    out.append("\\\\r")
+                    out.append("\\r")
                 elif char == "\t":
-                    out.append("\\\\t")
+                    out.append("\\t")
                 elif ord(char) < 0x20:
-                    out.append(f"\\\\u{ord(char):04x}")
+                    out.append(f"\\u{ord(char):04x}")
                 else:
                     out.append(char)
             else:
