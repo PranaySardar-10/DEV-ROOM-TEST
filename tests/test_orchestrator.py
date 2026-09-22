@@ -120,8 +120,8 @@ class DevRoomOrchestratorTests(unittest.TestCase):
     def test_empty_implementer_halts_before_qa(self) -> None:
         class EmptyImplementer(MockProvider):
             def execute(self, task):
-                self.calls.append(task)
                 if task.role == "Implementer":
+                    self.calls.append(task)
                     return AgentResult(role=task.role, summary="No integration.")
                 return super().execute(task)
 
