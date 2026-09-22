@@ -4,7 +4,8 @@ import argparse
 import time
 from pathlib import Path
 
-from .bootstrap import build_from_config_file
+from .bootstrap import build_from_config
+from .config import load_config
 from .config import write_example_config
 from .control_api import WorkflowController, serve_control_api
 from .orchestrator import MockProvider
@@ -48,11 +49,11 @@ def main() -> None:
         raise SystemExit(f"Workspace does not exist or is not a directory: {workspace}")
 
     if args.provider == "config":
-        orchestrator = build_from_config_file(args.config)
-        require_available_providers(tuple(orchestrator.provider._providers[name] for name in ()))
+        config = load_config(args.config)
+        require_available_providers(config.providers)
         if not args.allowed_path:
             raise SystemExit("At least one --allowed-path is required for a production Implementer run.")
-        provider = orchestrator.provider
+        provider = build_from_config(config).provider
     else:
         provider = MockProvider()
 
