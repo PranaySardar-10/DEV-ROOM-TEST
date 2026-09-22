@@ -6,7 +6,6 @@ from typing import Any, Callable, Mapping
 from .orchestrator import AgentProvider
 from .provider_registry import ProviderRegistry
 
-
 ProviderBuilder = Callable[[Mapping[str, Any]], AgentProvider]
 
 
@@ -46,7 +45,9 @@ class ProviderFactory:
             ) from exc
         return builder(dict(spec.options))
 
-    def build_registry(self, specs: list[ProviderSpec] | tuple[ProviderSpec, ...]) -> ProviderRegistry:
+    def build_registry(
+        self, specs: list[ProviderSpec] | tuple[ProviderSpec, ...]
+    ) -> ProviderRegistry:
         registry = ProviderRegistry()
         for spec in specs:
             registry.register(spec.name, self.create(spec))
@@ -59,11 +60,20 @@ def build_default_factory() -> ProviderFactory:
 
     def build_codex(options: Mapping[str, Any]) -> AgentProvider:
         from .codex_provider import CodexCliConfig, CodexCliProvider
-
         return CodexCliProvider(CodexCliConfig(**dict(options)))
 
+    def build_local_qwen(options: Mapping[str, Any]) -> AgentProvider:
+        from .local_qwen_provider import LocalQwenConfig, LocalQwenProvider
+        return LocalQwenProvider(LocalQwenConfig(**dict(options)))
+
     factory.register("codex-cli", build_codex)
+    factory.register("local-qwen-ollama", build_local_qwen)
     return factory
 
 
-__all__ = ["ProviderBuilder", "ProviderFactory", "ProviderSpec", "build_default_factory"]
+__all__ = [
+    "ProviderBuilder",
+    "ProviderFactory",
+    "ProviderSpec",
+    "build_default_factory",
+]
