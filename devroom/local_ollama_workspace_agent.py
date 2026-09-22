@@ -145,16 +145,85 @@ class LocalOllamaWorkspaceAgent:
             raise RuntimeError(
                 "Implementer returned empty output; no workspace files were changed."
             )
-        try:
-            payload = json.loads(text)
-        except json.JSONDecodeError:
-            payload = LocalOllamaWorkspaceAgent._extract_json_object(text)
-        if not isinstance(payload, dict):
-            raise RuntimeError("Implementer JSON response must be an object.")
-        return payload
+
+        # Ollama CLI JSON mode may return a response envelope whose assistant
+        # content is itself the JSON artifact payload. Accept both the direct
+        # payload and the envelope without weakening the artifact validation.
+        candidates = [text]
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                envelope = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(envelope, dict):
+                response = envelope.get("response")
+                if isinstance(response, str):
+                    candidates.append(response)
+                message = envelope.get("message")
+                if isinstance(message, dict):
+                    content = message.get("content")
+                    if isinstance(content, str):
+                        candidates.append(content)
+
+        for candidate_text in candidates:
+            payload = LocalOllamaWorkspaceAgent._try_parse_json(candidate_text)
+            if isinstance(payload, dict) and isinstance(payload.get("files"), list):
+                return payload
+
+        raise RuntimeError(
+            "Implementer returned no valid JSON artifact payload; "
+            "no workspace files were changed."
+        )
 
     @staticmethod
-    def _extract_json_object(text: str) -> dict[str, Any]:
+    def _try_parse_json(text: str) -> Any:
+        normalized = LocalOllamaWorkspaceAgent._escape_raw_control_chars(text.strip())
+        if not normalized:
+            return None
+        try:
+            return json.loads(normalized)
+        except json.JSONDecodeError:
+            return LocalOllamaWorkspaceAgent._extract_json_object(normalized)
+
+    @staticmethod
+    def _escape_raw_control_chars(text: str) -> str:
+        # Recover JSON objects containing literal newlines/tabs inside string
+        # values, which some local models emit despite JSON mode.
+        out: list[str] = []
+        in_string = False
+        escaped = False
+        for char in text:
+            if in_string:
+                if escaped:
+                    out.append(char)
+                    escaped = False
+                elif char == "\\":
+                    out.append(char)
+                    escaped = True
+                elif char == '"':
+                    out.append(char)
+                    in_string = False
+                elif char == "\n":
+                    out.append("\\\\n")
+                elif char == "\r":
+                    out.append("\\\\r")
+                elif char == "\t":
+                    out.append("\\\\t")
+                elif ord(char) < 0x20:
+                    out.append(f"\\\\u{ord(char):04x}")
+                else:
+                    out.append(char)
+            else:
+                out.append(char)
+                if char == '"':
+                    in_string = True
+        return "".join(out)
+
+    @staticmethod
+    def _extract_json_object(text: str) -> dict[str, Any] | None:
         decoder = json.JSONDecoder()
         for start, char in enumerate(text):
             if char != "{":
@@ -165,9 +234,6 @@ class LocalOllamaWorkspaceAgent:
                 continue
             if isinstance(candidate, dict) and isinstance(candidate.get("files"), list):
                 return candidate
-        raise RuntimeError(
-            "Implementer returned no valid JSON artifact payload; "
-            "no workspace files were changed."
-        )
+        return None
 
 __all__ = ["LocalOllamaWorkspaceAgent"]
