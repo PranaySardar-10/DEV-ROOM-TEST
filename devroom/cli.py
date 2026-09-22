@@ -45,6 +45,8 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if not args.check and (not args.goal or not args.workspace):
         parser.error("--goal and --workspace are required unless --check is used.")
+    if not args.check and not args.allowed_path:
+        parser.error("At least one --allowed-path is required for a production Implementer run.")
     return args
 
 
