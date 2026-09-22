@@ -72,12 +72,12 @@ DEFAULT_ROLE_BINDINGS = {
         instructions="Produce a concrete implementation proposal for human/ChatGPT review. Do not integrate it into the production workspace.",
     ),
     "Implementer": RoleBinding(
-        provider="qwen3.5-4b-workspace-local",
+        provider="gemma4-e4b-local",
         instructions="Integrate only the explicitly approved proposal within the assigned task scope. Do not self-approve.",
         sandbox=WORKSPACE_WRITE,
     ),
     "QA": RoleBinding(
-        provider="qwen3.5-4b-local",
+        provider="gemma4-e4b-local",
         instructions="Run or inspect automated validation and report reproducible evidence. Do not modify implementation.",
     ),
 }
