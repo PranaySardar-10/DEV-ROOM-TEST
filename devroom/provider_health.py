@@ -35,9 +35,9 @@ def diagnose_providers(
                     f"Codex CLI {'found' if available else 'not found'}: {command!r}.",
                 )
             )
-        elif spec.kind == "local-qwen-ollama":
+        elif spec.kind in {"local-qwen-ollama", "local-ollama"}:
             command = str(spec.options.get("command", "ollama"))
-            model = str(spec.options.get("model", "qwen2.5-coder:3b"))
+            model = str(spec.options.get("model", ""))
             available = _command_available(command)
             diagnostics.append(
                 ProviderDiagnostic(
@@ -45,7 +45,7 @@ def diagnose_providers(
                     spec.kind,
                     available,
                     (
-                        f"Local Qwen CLI {'found' if available else 'not found'}: "
+                        f"Local Ollama CLI {'found' if available else 'not found'}: "
                         f"{command!r}; configured model: {model!r}. "
                         "Model installation is not probed by this startup check."
                     ),
