@@ -23,20 +23,22 @@ class ControlApiTests(unittest.TestCase):
             time.sleep(0.01)
         self.fail(f"workflow did not reach status {status}")
 
-    def test_controller_exposes_final_confirmation_and_accepts_decision(self) -> None:
+    def test_controller_exposes_human_review_and_accepts_decision(self) -> None:
         controller = WorkflowController(
             MockProvider(),
             workflow_id="test-1",
-            goal="Test final confirmation",
+            goal="Test human review",
         )
         controller.start()
-        self._wait_for_gate(controller, "human_confirmation")
+        self._wait_for_gate(controller, "human_review")
 
         snapshot = controller.snapshot()
         self.assertEqual(snapshot["status"], "awaiting_human")
-        self.assertEqual(snapshot["stage"], "human_confirmation")
+        self.assertEqual(snapshot["stage"], "human_review")
         self.assertTrue(any(item["decision"] == "awaiting" for item in snapshot["feedback"]))
 
+        controller.decide(HumanDecision.APPROVE)
+        self._wait_for_gate(controller, "unity_validation")
         controller.decide(HumanDecision.APPROVE)
         self._wait_for_status(controller, "complete")
         self.assertEqual(controller.snapshot()["stage"], "complete")
@@ -48,13 +50,13 @@ class ControlApiTests(unittest.TestCase):
             goal="Test feedback validation",
         )
         controller.start()
-        self._wait_for_gate(controller, "human_confirmation")
+        self._wait_for_gate(controller, "human_review")
 
         with self.assertRaises(ValueError):
             controller.decide(HumanDecision.REQUEST_CHANGES, "   ")
 
         controller.decide(HumanDecision.REQUEST_CHANGES, "Fix the implementation.")
-        self._wait_for_gate(controller, "human_confirmation")
+        self._wait_for_gate(controller, "human_review")
         snapshot = controller.snapshot()
         self.assertEqual(snapshot["status"], "awaiting_human")
         self.assertTrue(
@@ -77,7 +79,16 @@ class ControlApiTests(unittest.TestCase):
             with urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as response:
                 self.assertEqual(json.load(response)["ok"], True)
 
-            self._wait_for_gate(controller, "human_confirmation")
+            self._wait_for_gate(controller, "human_review")
+            request = Request(
+                f"http://127.0.0.1:{port}/api/workflow/decision",
+                data=json.dumps({"decision": "approve"}).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(request, timeout=2) as response:
+                self.assertEqual(response.status, 202)
+            self._wait_for_gate(controller, "unity_validation")
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
                 data=json.dumps({"decision": "approve"}).encode(),
@@ -90,6 +101,27 @@ class ControlApiTests(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+    def test_controller_forwards_allowed_paths_to_orchestrator(self) -> None:
+        provider = MockProvider()
+        controller = WorkflowController(
+            provider,
+            workflow_id="scope-test",
+            goal="Test scoped implementation",
+            workspace=r"D:\DEV_ROOM_TEST",
+            allowed_paths=("Assets/Scripts/Test.cs",),
+        )
+        controller.start()
+        self._wait_for_gate(controller, "human_review")
+        controller.decide(HumanDecision.APPROVE)
+        self._wait_for_gate(controller, "unity_validation")
+
+        implementer = next(task for task in provider.calls if task.role == "Implementer")
+        self.assertEqual(implementer.context["workspace"], r"D:\DEV_ROOM_TEST")
+        self.assertEqual(implementer.context["allowed_paths"], "Assets/Scripts/Test.cs")
+
+        controller.decide(HumanDecision.HALT, "Stop after scope assertion.")
+        self._wait_for_status(controller, "halted")
 
 
 if __name__ == "__main__":
