@@ -18,6 +18,16 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
         payload = LocalOllamaWorkspaceAgent._parse_payload(output)
         self.assertEqual(payload["files"][0]["path"], "smoke_test.txt")
 
+    def test_ollama_response_envelope_is_parsed(self):
+        output = '{"model":"gemma4:e4b","response":"{\"summary\":\"ok\",\"files\":[{\"path\":\"smoke_test.txt\",\"content\":\"ok\"}]}","done":true}'
+        payload = LocalOllamaWorkspaceAgent._parse_payload(output)
+        self.assertEqual(payload["files"][0]["content"], "ok")
+
+    def test_multiline_json_string_is_recovered(self):
+        output = '{"summary":"ok","files":[{"path":"script.txt","content":"line one\nline two"}]}'
+        payload = LocalOllamaWorkspaceAgent._parse_payload(output)
+        self.assertEqual(payload["files"][0]["content"], "line one\nline two")
+
     def test_malformed_wrapped_json_is_rejected(self):
         with self.assertRaises(RuntimeError):
             LocalOllamaWorkspaceAgent._parse_payload(
