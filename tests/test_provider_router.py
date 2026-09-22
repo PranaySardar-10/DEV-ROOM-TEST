@@ -36,6 +36,38 @@ class ProviderRouterTests(unittest.TestCase):
             codex.tasks[1].context["role_instructions"],
         )
 
+
+    def test_workspace_agent_adapter_can_back_implementer(self) -> None:
+        from devroom.workspace_agent import LocalWorkspaceAgentAdapter
+
+        class WorkspaceImplementer:
+            def execute_in_workspace(self, task, workspace):
+                workspace.write_file("implemented.txt", task.goal)
+                return AgentResult(
+                    role=task.role,
+                    summary="implemented in workspace",
+                    artifacts=("implemented.txt",),
+                )
+
+        workspace_agent = WorkspaceImplementer()
+        router = ProviderRouter(
+            {"workspace": LocalWorkspaceAgentAdapter(workspace_agent)},
+            {"Implementer": RoleBinding("workspace", "Implement only the approved scope.", WORKSPACE_WRITE)},
+        )
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            result = router.execute(
+                AgentTask(
+                    role="Implementer",
+                    goal="Create the implementation",
+                    context={"workspace": directory},
+                )
+            )
+            self.assertEqual(result.artifacts, ("implemented.txt",))
+            with open(f"{directory}/implemented.txt", encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), "Create the implementation")
+
     def test_read_only_role_cannot_be_escalated(self) -> None:
         router = ProviderRouter(
             {"codex": RecordingProvider()},

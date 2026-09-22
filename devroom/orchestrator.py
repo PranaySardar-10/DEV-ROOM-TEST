@@ -5,6 +5,10 @@ from enum import Enum
 from typing import Callable, Mapping, Protocol
 
 from .state_store import WorkflowStateWriter
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .provider_registry import ProviderRegistry
 
 
 class Stage(str, Enum):
@@ -76,6 +80,21 @@ class DevRoomOrchestrator:
     def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None) -> None:
         self.provider = provider
         self.state_writer = state_writer
+
+    @classmethod
+    def with_provider_registry(
+        cls,
+        registry: "ProviderRegistry",
+        bindings: Mapping[str, object] | None = None,
+        *,
+        state_writer: WorkflowStateWriter | None = None,
+    ) -> "DevRoomOrchestrator":
+        from .provider_router import DEFAULT_ROLE_BINDINGS, ProviderRouter
+
+        return cls(
+            ProviderRouter(registry.as_mapping(), bindings or DEFAULT_ROLE_BINDINGS),
+            state_writer=state_writer,
+        )
 
     @classmethod
     def with_provider_router(
