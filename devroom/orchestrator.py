@@ -116,6 +116,7 @@ class DevRoomOrchestrator:
         goal: str,
         *,
         workspace: str | None = None,
+        allowed_paths: tuple[str, ...] = (),
         human_gate: HumanGate | None = None,
         max_feedback_cycles: int = 3,
     ) -> WorkflowResult:
@@ -123,6 +124,8 @@ class DevRoomOrchestrator:
             raise ValueError("goal must not be empty")
         if workspace is not None and not str(workspace).strip():
             raise ValueError("workspace must not be blank")
+        if any(not str(path).strip() for path in allowed_paths):
+            raise ValueError("allowed_paths must not contain blank paths")
         if max_feedback_cycles < 0:
             raise ValueError("max_feedback_cycles must be >= 0")
 
@@ -169,6 +172,8 @@ class DevRoomOrchestrator:
             task_context = dict(context or {})
             if workspace is not None:
                 task_context["workspace"] = str(workspace)
+            if allowed_paths:
+                task_context["allowed_paths"] = ",".join(str(path) for path in allowed_paths)
             result = self.provider.execute(
                 AgentTask(role=role, goal=task_goal, context=task_context)
             )
