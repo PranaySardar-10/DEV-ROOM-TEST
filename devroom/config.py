@@ -109,11 +109,38 @@ def write_example_config(path: str | Path) -> Path:
                 },
             },
             {
-                "name": "qwen2.5-coder-3b-local",
-                "kind": "local-qwen-ollama",
+                "name": "qwen3.5-4b-local",
+                "kind": "local-ollama",
                 "options": {
                     "command": "ollama",
-                    "model": "qwen2.5-coder:3b",
+                    "model": "qwen3.5:4b",
+                    "timeout_seconds": 600,
+                },
+            },
+            {
+                "name": "qwen3.5-3b-local",
+                "kind": "local-ollama",
+                "options": {
+                    "command": "ollama",
+                    "model": "qwen3.5:3b",
+                    "timeout_seconds": 600,
+                },
+            },
+            {
+                "name": "qwen3.5-1.5b-local",
+                "kind": "local-ollama",
+                "options": {
+                    "command": "ollama",
+                    "model": "qwen3.5:1.5b",
+                    "timeout_seconds": 600,
+                },
+            },
+            {
+                "name": "gemma4-e4b-local",
+                "kind": "local-ollama",
+                "options": {
+                    "command": "ollama",
+                    "model": "gemma4:e4b",
                     "timeout_seconds": 600,
                 },
             },
@@ -121,9 +148,9 @@ def write_example_config(path: str | Path) -> Path:
         "bindings": {
             role: {
                 "provider": (
-                    binding.provider
-                    if binding.provider != "qwen2.5-coder-3b-local"
-                    else "qwen2.5-coder-3b-local"
+                    "qwen3.5-4b-local"
+                    if binding.provider == "qwen2.5-coder-3b-local"
+                    else binding.provider
                 ),
                 "instructions": binding.instructions,
                 "sandbox": binding.sandbox,
