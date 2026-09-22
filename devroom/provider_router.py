@@ -60,7 +60,7 @@ class ProviderRouter:
 # workflow gate, not an autonomous provider role.
 DEFAULT_ROLE_BINDINGS = {
     "Lead": RoleBinding(
-        provider="qwen3.5-4b-local",
+        provider="gemma4-e4b-local",
         instructions="Coordinate the production task, bound scope, and acceptance criteria. Do not modify production files.",
     ),
     "Architect": RoleBinding(
