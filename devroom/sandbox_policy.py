@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .orchestrator import Stage
-
 READ_ONLY = "read-only"
 WORKSPACE_WRITE = "workspace-write"
 
