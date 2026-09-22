@@ -6,7 +6,6 @@ from pathlib import Path
 
 from .bootstrap import build_from_config
 from .config import load_config
-from .config import write_example_config
 from .control_api import WorkflowController, serve_control_api
 from .orchestrator import MockProvider
 from .provider_health import require_available_providers
