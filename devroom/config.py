@@ -126,10 +126,23 @@ def write_example_config(path: str | Path) -> Path:
                     "timeout_seconds": 600,
                 },
             },
+            {
+                "name": "qwen3.5-3b-workspace-local",
+                "kind": "local-ollama-workspace",
+                "options": {
+                    "command": "ollama",
+                    "model": "qwen3.5:3b",
+                    "timeout_seconds": 600,
+                },
+            },
         ],
         "bindings": {
             role: {
-                "provider": binding.provider,
+                "provider": (
+                    "qwen3.5-3b-workspace-local"
+                    if role == "Implementer"
+                    else binding.provider
+                ),
                 "instructions": binding.instructions,
                 "sandbox": binding.sandbox,
             }
