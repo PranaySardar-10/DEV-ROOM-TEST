@@ -63,7 +63,7 @@ def load_config(path: str | Path) -> DevRoomConfig:
             bindings[str(role)] = RoleBinding(
                 provider=str(item.get("provider", "")),
                 instructions=str(item.get("instructions", "")),
-                sandbox=str(item.get("sandbox", "read-only")),
+                sandbox=str(item.get("sandbox", READ_ONLY)),
             )
 
     return DevRoomConfig(tuple(providers), bindings)
@@ -77,12 +77,18 @@ def validate_config(config: DevRoomConfig) -> None:
     if len(names) != len(set(names)):
         raise ValueError("Provider names must be unique.")
 
+    required_roles = {"Lead", "Architect", "Coder", "Implementer", "QA"}
+    missing_roles = required_roles - set(config.bindings)
+    if missing_roles:
+        raise ValueError(
+            "Production configuration is missing required role bindings: "
+            + ", ".join(sorted(missing_roles))
+        )
+
     known = set(names)
     for role, binding in config.bindings.items():
         if not role.strip():
             raise ValueError("Role names must not be blank.")
-        if not binding.provider.strip():
-            raise ValueError(f"Binding for {role!r} has a blank provider.")
         if binding.provider not in known:
             raise ValueError(
                 f"Binding for role {role!r} references unknown provider {binding.provider!r}."
@@ -91,6 +97,14 @@ def validate_config(config: DevRoomConfig) -> None:
             raise ValueError(
                 f"Binding for role {role!r} has unsupported sandbox {binding.sandbox!r}."
             )
+
+    implementer = config.bindings["Implementer"]
+    if implementer.sandbox != WORKSPACE_WRITE:
+        raise ValueError("Implementer must use the workspace-write sandbox.")
+
+    for role in ("Lead", "Architect", "Coder", "QA"):
+        if config.bindings[role].sandbox != READ_ONLY:
+            raise ValueError(f"{role} must use the read-only sandbox.")
 
 
 def write_example_config(path: str | Path) -> Path:
