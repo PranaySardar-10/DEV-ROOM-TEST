@@ -66,8 +66,13 @@ def build_default_factory() -> ProviderFactory:
         from .local_qwen_provider import LocalQwenConfig, LocalQwenProvider
         return LocalQwenProvider(LocalQwenConfig(**dict(options)))
 
+    def build_local_ollama(options: Mapping[str, Any]) -> AgentProvider:
+        from .local_ollama_provider import LocalOllamaConfig, LocalOllamaProvider
+        return LocalOllamaProvider(LocalOllamaConfig(**dict(options)))
+
     factory.register("codex-cli", build_codex)
     factory.register("local-qwen-ollama", build_local_qwen)
+    factory.register("local-ollama", build_local_ollama)
     return factory
 
 

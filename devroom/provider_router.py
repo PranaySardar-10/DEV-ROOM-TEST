@@ -75,7 +75,7 @@ DEFAULT_ROLE_BINDINGS = {
         instructions="Review independently from a fresh context. Inspect the diff, requirements, tests, and repository. Do not modify the implementation.",
     ),
     "QA": RoleBinding(
-        provider="qwen2.5-coder-3b-local",
+        provider="qwen3.5-4b-local",
         instructions="Run or inspect tests and report reproducible evidence; do not modify implementation.",
     ),
 }
