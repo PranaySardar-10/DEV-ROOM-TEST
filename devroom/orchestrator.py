@@ -10,12 +10,11 @@ from .state_store import WorkflowStateWriter
 class Stage(str, Enum):
     LEAD = "lead"
     ARCHITECT = "architect"
-    GATE_1 = "human_gate_1"
     IMPLEMENTER = "implementer"
     REVIEWER = "reviewer"
     QA = "qa"
     LEAD_REPORT = "lead_report"
-    GATE_2 = "human_gate_2"
+    HUMAN_CONFIRMATION = "human_confirmation"
     COMPLETE = "complete"
     HALTED = "halted"
 
@@ -56,7 +55,11 @@ class MockProvider:
 
     def execute(self, task: AgentTask) -> AgentResult:
         self.calls.append(task)
-        return AgentResult(role=task.role, summary=f"Mock {task.role} completed: {task.goal}", artifacts=("mock-artifact",))
+        return AgentResult(
+            role=task.role,
+            summary=f"Mock {task.role} completed: {task.goal}",
+            artifacts=("mock-artifact",),
+        )
 
 
 @dataclass
@@ -68,7 +71,7 @@ class WorkflowResult:
 
 
 class DevRoomOrchestrator:
-    """Provider-neutral state machine with explicit gates, feedback, and durable snapshots."""
+    """Provider-neutral workflow with one final human confirmation and feedback loops."""
 
     def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None) -> None:
         self.provider = provider
@@ -139,17 +142,28 @@ class DevRoomOrchestrator:
                 last_feedback=persisted_feedback,
             )
 
-        def call(stage: Stage, role: str, task_goal: str, context: dict[str, str] | None = None) -> AgentResult:
+        def call(
+            stage: Stage,
+            role: str,
+            task_goal: str,
+            context: dict[str, str] | None = None,
+        ) -> AgentResult:
             history.append(stage)
             task_context = dict(context or {})
             if workspace is not None:
                 task_context["workspace"] = str(workspace)
-            result = self.provider.execute(AgentTask(role=role, goal=task_goal, context=task_context))
+            result = self.provider.execute(
+                AgentTask(role=role, goal=task_goal, context=task_context)
+            )
             results.append(result)
             persist(stage)
             return result
 
-        def gate(stage: Stage, prompt: str, context: Mapping[str, str]) -> tuple[HumanDecision, str]:
+        def gate(
+            stage: Stage,
+            prompt: str,
+            context: Mapping[str, str],
+        ) -> tuple[HumanDecision, str]:
             history.append(stage)
             persist(stage)
             if human_gate is None:
@@ -158,7 +172,6 @@ class DevRoomOrchestrator:
             if not isinstance(decision, HumanDecision):
                 decision = HumanDecision(decision)
             feedback = feedback.strip()
-            # Persist the actual decision after the human callback returns.
             persist(stage, last_decision=decision, last_feedback=feedback)
             return decision, feedback
 
@@ -170,42 +183,16 @@ class DevRoomOrchestrator:
             {"lead_summary": lead.summary},
         )
 
-        decision, feedback = gate(
-            Stage.GATE_1,
-            f"Review the architecture before implementation: {goal}",
-            {"architecture_summary": architecture.summary},
-        )
-        if decision is HumanDecision.REQUEST_CHANGES:
-            if not feedback:
-                feedback = "Human requested architecture changes."
-            architecture = call(
-                Stage.ARCHITECT,
-                "Architect",
-                f"Revise the implementation design for: {goal}",
-                {"previous_architecture": architecture.summary, "human_feedback": feedback},
-            )
-            decision, feedback = gate(
-                Stage.GATE_1,
-                f"Review the revised architecture before implementation: {goal}",
-                {"architecture_summary": architecture.summary, "human_feedback": feedback},
-            )
-        if decision is not HumanDecision.APPROVE:
-            reason = feedback or f"{Stage.GATE_1.value} was not approved."
-            persist(Stage.HALTED, reason)
-            return WorkflowResult(Stage.HALTED, history, results, reason)
-
         implementation_feedback = ""
         for cycle in range(max_feedback_cycles + 1):
-            implementer_context = {
-                "architecture_summary": architecture.summary,
-                "gate_1_decision": HumanDecision.APPROVE.value,
-            }
+            implementer_context = {"architecture_summary": architecture.summary}
             if implementation_feedback:
                 implementer_context["human_feedback"] = implementation_feedback
+
             implementation = call(
                 Stage.IMPLEMENTER,
                 "Implementer",
-                f"Implement the approved design for: {goal}",
+                f"Implement the design for: {goal}",
                 implementer_context,
             )
             if not implementation.artifacts:
@@ -231,31 +218,38 @@ class DevRoomOrchestrator:
             report = call(
                 Stage.LEAD_REPORT,
                 "Lead",
-                f"Prepare the integration report for: {goal}",
-                {"review_summary": review.summary, "qa_summary": qa.summary},
+                f"Prepare the final integration report for: {goal}",
+                {
+                    "review_summary": review.summary,
+                    "qa_summary": qa.summary,
+                },
             )
 
             decision, feedback = gate(
-                Stage.GATE_2,
-                f"Review the implementation, tests, and visual/gameplay result for: {goal}",
+                Stage.HUMAN_CONFIRMATION,
+                f"Confirm the completed implementation, tests, and visual/gameplay result for: {goal}",
                 {
                     "review_summary": review.summary,
                     "qa_summary": qa.summary,
                     "lead_report": report.summary,
                 },
             )
+
             if decision is HumanDecision.APPROVE:
                 history.append(Stage.COMPLETE)
                 persist(Stage.COMPLETE)
                 return WorkflowResult(Stage.COMPLETE, history, results)
+
             if decision is HumanDecision.HALT:
-                reason = feedback or "Human Gate 2 halted the workflow."
+                reason = feedback or "Human confirmation halted the workflow."
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
+
             if cycle >= max_feedback_cycles:
                 reason = "Maximum human feedback cycles reached."
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
+
             implementation_feedback = feedback or "Human requested implementation changes."
 
         reason = "Workflow ended without approval."

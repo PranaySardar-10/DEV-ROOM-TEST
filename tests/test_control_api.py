@@ -16,29 +16,29 @@ class ControlApiTests(unittest.TestCase):
             time.sleep(0.01)
         self.fail(f"workflow did not reach active {gate}")
 
-    def test_controller_exposes_gate_and_accepts_decision(self) -> None:
+    def _wait_for_status(self, controller: WorkflowController, status: str) -> None:
+        for _ in range(200):
+            if controller.snapshot()["status"] == status:
+                return
+            time.sleep(0.01)
+        self.fail(f"workflow did not reach status {status}")
+
+    def test_controller_exposes_final_confirmation_and_accepts_decision(self) -> None:
         controller = WorkflowController(
             MockProvider(),
             workflow_id="test-1",
-            goal="Test a control gate",
+            goal="Test final confirmation",
         )
         controller.start()
-        self._wait_for_gate(controller, "human_gate_1")
+        self._wait_for_gate(controller, "human_confirmation")
 
         snapshot = controller.snapshot()
         self.assertEqual(snapshot["status"], "awaiting_human")
-        self.assertEqual(snapshot["stage"], "human_gate_1")
+        self.assertEqual(snapshot["stage"], "human_confirmation")
         self.assertTrue(any(item["decision"] == "awaiting" for item in snapshot["feedback"]))
 
         controller.decide(HumanDecision.APPROVE)
-        self._wait_for_gate(controller, "human_gate_2")
-        self.assertEqual(controller.snapshot()["status"], "awaiting_human")
-
-        controller.decide(HumanDecision.APPROVE)
-        for _ in range(200):
-            if controller.snapshot()["status"] == "complete":
-                break
-            time.sleep(0.01)
+        self._wait_for_status(controller, "complete")
         self.assertEqual(controller.snapshot()["stage"], "complete")
 
     def test_request_changes_requires_feedback(self) -> None:
@@ -48,19 +48,19 @@ class ControlApiTests(unittest.TestCase):
             goal="Test feedback validation",
         )
         controller.start()
-        self._wait_for_gate(controller, "human_gate_1")
+        self._wait_for_gate(controller, "human_confirmation")
 
         with self.assertRaises(ValueError):
             controller.decide(HumanDecision.REQUEST_CHANGES, "   ")
 
-        controller.decide(HumanDecision.REQUEST_CHANGES, "Change the architecture.")
-        self._wait_for_gate(controller, "human_gate_1")
+        controller.decide(HumanDecision.REQUEST_CHANGES, "Fix the implementation.")
+        self._wait_for_gate(controller, "human_confirmation")
         snapshot = controller.snapshot()
         self.assertEqual(snapshot["status"], "awaiting_human")
         self.assertTrue(
             any(
                 item["decision"] == HumanDecision.REQUEST_CHANGES.value
-                and item["feedback"] == "Change the architecture."
+                and item["feedback"] == "Fix the implementation."
                 for item in snapshot["feedback"]
             )
         )
@@ -77,7 +77,7 @@ class ControlApiTests(unittest.TestCase):
             with urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as response:
                 self.assertEqual(json.load(response)["ok"], True)
 
-            self._wait_for_gate(controller, "human_gate_1")
+            self._wait_for_gate(controller, "human_confirmation")
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
                 data=json.dumps({"decision": "approve"}).encode(),
@@ -86,6 +86,7 @@ class ControlApiTests(unittest.TestCase):
             )
             with urlopen(request, timeout=2) as response:
                 self.assertEqual(response.status, 202)
+            self._wait_for_status(controller, "complete")
         finally:
             server.shutdown()
             server.server_close()
