@@ -58,4 +58,35 @@ def write_benchmark_report(results: list[dict[str, object]], path: str | Path) -
     return target
 
 
-__all__ = ["benchmark_models", "write_benchmark_report"]
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Benchmark local Ollama coding models.")
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        default=["qwen3.5:4b", "qwen3.5:3b", "qwen3.5:1.5b", "gemma4:e4b"],
+    )
+    parser.add_argument("--command", default="ollama")
+    parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--output", default="local-model-benchmark.json")
+    args = parser.parse_args()
+
+    results = benchmark_models(
+        args.models, command=args.command, timeout_seconds=args.timeout
+    )
+    write_benchmark_report(results, args.output)
+    for result in results:
+        print(
+            f"{result['model']}: {result['status']} "
+            f"({result['elapsed_seconds']}s)"
+        )
+    print(f"Report written to {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
+
+__all__ = ["benchmark_models", "write_benchmark_report", "main"]
