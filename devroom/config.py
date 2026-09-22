@@ -69,7 +69,6 @@ def load_config(path: str | Path) -> DevRoomConfig:
     return DevRoomConfig(tuple(providers), bindings)
 
 
-
 def validate_config(config: DevRoomConfig) -> None:
     """Validate cross-references and execution constraints before startup."""
     names = [spec.name.strip() for spec in config.providers]
@@ -93,6 +92,7 @@ def validate_config(config: DevRoomConfig) -> None:
                 f"Binding for role {role!r} has unsupported sandbox {binding.sandbox!r}."
             )
 
+
 def write_example_config(path: str | Path) -> Path:
     """Write a provider-neutral starter configuration."""
     target = Path(path)
@@ -107,11 +107,24 @@ def write_example_config(path: str | Path) -> Path:
                     "ephemeral": True,
                     "timeout_seconds": 3600,
                 },
-            }
+            },
+            {
+                "name": "qwen2.5-coder-3b-local",
+                "kind": "local-qwen-ollama",
+                "options": {
+                    "command": "ollama",
+                    "model": "qwen2.5-coder:3b",
+                    "timeout_seconds": 600,
+                },
+            },
         ],
         "bindings": {
             role: {
-                "provider": "codex",
+                "provider": (
+                    binding.provider
+                    if binding.provider != "qwen2.5-coder-3b-local"
+                    else "qwen2.5-coder-3b-local"
+                ),
                 "instructions": binding.instructions,
                 "sandbox": binding.sandbox,
             }
