@@ -8,14 +8,14 @@ class RoleSandboxPolicyTests(unittest.TestCase):
         policy = RoleSandboxPolicy()
         self.assertEqual(policy.sandbox_for("Lead"), READ_ONLY)
         self.assertEqual(policy.sandbox_for("Architect"), READ_ONLY)
+        self.assertEqual(policy.sandbox_for("Coder"), READ_ONLY)
         self.assertEqual(policy.sandbox_for("Implementer"), WORKSPACE_WRITE)
-        self.assertEqual(policy.sandbox_for("Reviewer"), READ_ONLY)
         self.assertEqual(policy.sandbox_for("QA"), READ_ONLY)
         self.assertEqual(policy.sandbox_for("Unknown"), READ_ONLY)
 
     def test_non_implementer_cannot_be_writable(self) -> None:
         with self.assertRaises(PermissionError):
-            RoleSandboxPolicy({"Reviewer": WORKSPACE_WRITE})
+            RoleSandboxPolicy({"Coder": WORKSPACE_WRITE})
 
 
 if __name__ == "__main__":
