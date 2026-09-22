@@ -19,18 +19,18 @@ class ProviderRegistryRouterTests(unittest.TestCase):
     def test_router_accepts_registry_mapping_without_owning_registration(self) -> None:
         registry = ProviderRegistry()
         provider = RecordingProvider()
-        registry.register("codex", provider)
+        registry.register("worker", provider)
 
         router = ProviderRouter(
             registry.as_mapping(),
-            {"Implementer": RoleBinding("codex", "Implement.", "workspace-write")},
+            {"Implementer": RoleBinding("worker", "Implement.", "workspace-write")},
         )
 
         result = router.execute(
             AgentTask(
                 "Implementer",
                 "Implement feature",
-                {"workspace": tempfile.gettempdir()},
+                {"workspace": tempfile.gettempdir(), "allowed_paths": "feature.txt"},
             )
         )
 
