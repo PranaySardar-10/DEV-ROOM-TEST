@@ -93,7 +93,7 @@ DEFAULT_ROLE_BINDINGS = {
         ),
     ),
     "Implementer": RoleBinding(
-        provider="gemma4-e4b-local",
+        provider="gemma4-e4b-workspace-local",
         instructions=(
             _DEFAULT_NO_EXTRA + " Implement ONLY the explicitly approved proposal. "
             "Modify ONLY the supplied allowed_paths. Do not interpret, expand, improve, "
