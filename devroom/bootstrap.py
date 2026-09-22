@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .config import DevRoomConfig, load_config, validate_config
-from .orchestrator import AgentProvider, DevRoomOrchestrator
+from .orchestrator import AgentProvider, DevRoomOrchestrator, ResourceGuard
 from .provider_factory import ProviderFactory, ProviderSpec, build_default_factory
 from .provider_registry import ProviderRegistry
 from .provider_router import DEFAULT_ROLE_BINDINGS, RoleBinding
