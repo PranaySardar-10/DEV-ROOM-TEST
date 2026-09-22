@@ -1,33 +1,41 @@
 # DevRoom Agent Instructions
 
 ## Mission
-DevRoom is a provider-independent multi-agent software-development orchestrator.
 
-## Core workflow
-1. Lead validates the goal and breaks it into bounded tasks.
+DevRoom is the production factory for the main game project. It is not an experimental playground.
+
+## Production workflow
+
+1. Lead validates the goal and bounds the task.
 2. Architect produces design, interfaces, dependencies, and acceptance criteria.
-3. Human Gate 1 approves the implementation plan.
-4. Implementer works only within the assigned task scope.
-5. Reviewer independently audits the proposed change.
-6. QA independently validates behavior and evidence.
-7. Lead produces the final report.
-8. Human Gate 2 approves integration.
+3. Coder produces a concrete implementation proposal.
+4. Human/ChatGPT review decides whether the proposal may proceed.
+5. Implementer integrates only the approved proposal into the assigned workspace.
+6. QA runs automated validation and reports evidence.
+7. Human opens the Unity project and validates the actual runtime/gameplay result.
+8. Approval completes the task; a rejection becomes a correction instruction and returns to the Coder.
 
-## Boundaries
+## Authority
+
+- The human remains the final authority.
 - No agent may silently skip a human gate.
-- Implementers do not self-certify their work.
-- Reviewers do not directly bypass the implementation/review process.
-- QA reports evidence; it does not modify implementation.
-- The orchestrator must remain provider-independent.
-- A provider may back multiple logical roles, but each role has its own instructions and context.
-- Reviewer execution must receive an independent review context rather than inheriting implementation assumptions.
-- Git is the durable project state; conversation history is not the source of truth.
+- No agent may self-approve its own work.
+- ChatGPT review is represented by the human-review gate, not by an autonomous provider pretending to be ChatGPT.
+- Git is the durable project state and audit trail.
+
+## Role boundaries
+
+- Lead: read-only coordination.
+- Architect: read-only design.
+- Coder: read-only proposal generation; no production integration.
+- Implementer: workspace-write, only after explicit human approval.
+- QA: read-only evidence gathering.
+- Unity validation: human-controlled runtime/gameplay validation.
 
 ## Provider strategy
-- Codex is the primary high-capability provider for Lead, Architect, Implementer, and Reviewer roles.
-- Implementer and Reviewer are separate logical agents even when both use Codex.
-- Local Qwen workers are fallback/low-cost providers for bounded work such as QA and repetitive tasks.
-- Provider names are configuration, not workflow logic.
 
-## Current milestone
-Validate provider routing and role isolation before adding live model adapters or persistent workflow state.
+The production workforce uses local Ollama agents. Provider names are configuration, not workflow logic. Codex is historical infrastructure and must not be treated as the active production workforce.
+
+## Factory milestone
+
+The immediate milestone is to make the production workflow enforceable, then validate it with a small real factory task before game production begins.
