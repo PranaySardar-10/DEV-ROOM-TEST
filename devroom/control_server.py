@@ -4,43 +4,40 @@ import argparse
 import time
 from pathlib import Path
 
-from .codex_provider import CodexCliProvider
+from .bootstrap import build_from_config_file
+from .config import write_example_config
 from .control_api import WorkflowController, serve_control_api
 from .orchestrator import MockProvider
-from .provider_router import ProviderRouter, RoleBinding
-from .sandbox_policy import READ_ONLY, WORKSPACE_WRITE, RoleSandboxPolicy
-from .state_store import JsonWorkflowStateStore, WorkflowStateWriter
-
-
-def build_provider(kind: str):
-    if kind == "mock":
-        return MockProvider()
-
-    if kind == "codex":
-        codex = CodexCliProvider()
-        bindings = {
-            "Lead": RoleBinding("codex", "Coordinate the workflow; do not implement production code or merge changes.", READ_ONLY),
-            "Architect": RoleBinding("codex", "Produce design, interfaces, dependencies, and acceptance criteria; do not implement production code.", READ_ONLY),
-            "Implementer": RoleBinding("codex", "Implement only the approved task scope. Do not self-certify or merge changes.", WORKSPACE_WRITE),
-            "Reviewer": RoleBinding("codex", "Review independently from a fresh context. Inspect the diff, requirements, tests, and repository. Do not modify the implementation.", READ_ONLY),
-            "QA": RoleBinding("codex", "Run or inspect tests and report reproducible evidence; do not modify implementation.", READ_ONLY),
-        }
-        return ProviderRouter(
-            {"codex": codex},
-            bindings,
-            sandbox_policy=RoleSandboxPolicy(),
-        )
-
-    raise ValueError(f"Unsupported provider: {kind}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the local DevRoom control API.")
     parser.add_argument("--goal", required=True, help="Workflow goal.")
     parser.add_argument("--workspace", required=True, help="Existing workspace directory.")
-    parser.add_argument("--workflow-id", default="devroom-local", help="Stable workflow identifier.")
-    parser.add_argument("--provider", choices=("mock", "codex"), default="mock")
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Path to the production DevRoom JSON configuration.",
+    )
+    parser.add_argument(
+        "--workflow-id",
+        default="devroom-local",
+        help="Stable workflow identifier.",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=("config", "mock"),
+        default="config",
+        help="Use the production configured local workforce or deterministic mock mode.",
+    )
+    parser.add_argument(
+        "--allowed-path",
+        action="append",
+        default=[],
+        help="Relative production file path the Implementer may modify; repeat for multiple files.",
+    )
     parser.add_argument("--state-file", default=".devroom/workflow.json")
+    parser.add_argument("--max-feedback-cycles", type=int, default=3)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
@@ -49,18 +46,29 @@ def main() -> None:
     if not workspace.is_dir():
         raise SystemExit(f"Workspace does not exist or is not a directory: {workspace}")
 
+    if args.provider == "config":
+        provider = build_from_config_file(args.config).provider
+    else:
+        provider = MockProvider()
+
     state_path = Path(args.state_file)
     if not state_path.is_absolute():
         state_path = workspace / state_path
 
-    provider = build_provider(args.provider)
-    writer = WorkflowStateWriter(JsonWorkflowStateStore(state_path), args.workflow_id)
+    from .state_store import JsonWorkflowStateStore, WorkflowStateWriter
+
+    writer = WorkflowStateWriter(
+        JsonWorkflowStateStore(state_path),
+        args.workflow_id,
+    )
     controller = WorkflowController(
         provider,
         workflow_id=args.workflow_id,
         goal=args.goal,
         workspace=str(workspace),
+        allowed_paths=tuple(args.allowed_path),
         state_writer=writer,
+        max_feedback_cycles=args.max_feedback_cycles,
     )
     server = serve_control_api(controller, host=args.host, port=args.port)
     print(f"DevRoom control API listening on http://{args.host}:{server.server_address[1]}")
