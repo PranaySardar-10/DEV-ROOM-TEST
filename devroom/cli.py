@@ -30,6 +30,12 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--config", required=True, help="Path to devroom.json")
     parser.add_argument("--goal", help="Workflow goal")
     parser.add_argument("--workspace", help="Target workspace")
+    parser.add_argument(
+        "--allowed-path",
+        action="append",
+        default=[],
+        help="Relative production file path the Implementer may modify; repeat for multiple files.",
+    )
     parser.add_argument("--max-feedback-cycles", type=int, default=3)
     parser.add_argument(
         "--check",
@@ -59,6 +65,7 @@ def main() -> int:
     result = orchestrator.run(
         args.goal,
         workspace=args.workspace,
+        allowed_paths=tuple(args.allowed_path),
         human_gate=_human_gate,
         max_feedback_cycles=args.max_feedback_cycles,
     )
