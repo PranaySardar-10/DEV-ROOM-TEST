@@ -131,6 +131,15 @@ def write_example_config(path: str | Path) -> Path:
                 },
             },
             {
+                "name": "gemma4-e4b-workspace-local",
+                "kind": "local-ollama-workspace",
+                "options": {
+                    "command": "ollama",
+                    "model": "gemma4:e4b",
+                    "timeout_seconds": 600,
+                },
+            },
+            {
                 "name": "qwen3.5-4b-local",
                 "kind": "local-ollama",
                 "options": {
@@ -155,7 +164,7 @@ def write_example_config(path: str | Path) -> Path:
         },
         "bindings": {
             role: {
-                "provider": "gemma4-e4b-local",
+                "provider": binding.provider,
                 "instructions": binding.instructions,
                 "sandbox": binding.sandbox,
             }
