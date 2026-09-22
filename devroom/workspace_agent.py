@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Protocol, Sequence
+from typing import Protocol
 
 from .orchestrator import AgentProvider, AgentResult, AgentTask
+from .sandbox_policy import WORKSPACE_WRITE
 from .workspace_provider import LocalWorkspaceProvider
 
 
@@ -26,6 +27,14 @@ class LocalWorkspaceAgentAdapter:
         self.agent = agent
 
     def execute(self, task: AgentTask) -> AgentResult:
+        if task.role != "Implementer":
+            raise PermissionError(
+                "LocalWorkspaceAgentAdapter is restricted to the Implementer role."
+            )
+        if task.context.get("sandbox") != WORKSPACE_WRITE:
+            raise PermissionError(
+                "Workspace-agent execution requires the workspace-write sandbox."
+            )
         workspace_path = task.context.get("workspace")
         if not workspace_path:
             raise ValueError("Workspace-aware execution requires a workspace context.")
