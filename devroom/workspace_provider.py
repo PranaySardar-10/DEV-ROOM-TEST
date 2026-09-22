@@ -30,7 +30,7 @@ class LocalWorkspaceProvider:
             "workspace": str(self.workspace),
             "exists": self.workspace.exists(),
             "files": tuple(
-                str(path.relative_to(self.workspace))
+                path.relative_to(self.workspace).as_posix()
                 for path in sorted(self.workspace.rglob("*"))
                 if path.is_file()
                 and ".git" not in path.parts
