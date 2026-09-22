@@ -17,17 +17,12 @@ class RecordingProvider:
 class ProviderFactoryTests(unittest.TestCase):
     def test_factory_builds_named_registry_from_specs(self) -> None:
         factory = ProviderFactory()
-        factory.register(
-            "fake",
-            lambda options: RecordingProvider(str(options["label"])),
-        )
+        factory.register("fake", lambda options: RecordingProvider(str(options["label"])))
 
-        registry = factory.build_registry(
-            [
-                ProviderSpec("alpha", "fake", {"label": "A"}),
-                ProviderSpec("beta", "fake", {"label": "B"}),
-            ]
-        )
+        registry = factory.build_registry([
+            ProviderSpec("alpha", "fake", {"label": "A"}),
+            ProviderSpec("beta", "fake", {"label": "B"}),
+        ])
 
         self.assertEqual(registry.snapshot(), ("alpha", "beta"))
         self.assertEqual(registry.get("alpha").label, "A")
@@ -44,16 +39,20 @@ class ProviderFactoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             factory.register("fake", lambda _: RecordingProvider("two"))
 
-    def test_default_factory_registers_codex_builder(self) -> None:
+    def test_default_factory_exposes_only_local_providers(self) -> None:
         factory = build_default_factory()
-        provider = factory.create(
-            ProviderSpec(
-                "codex",
-                "codex-cli",
-                {"command": "codex", "ephemeral": True, "timeout_seconds": 60},
-            )
+        with self.assertRaises(KeyError):
+            factory.create(ProviderSpec("codex", "codex-cli"))
+        self.assertEqual(
+            factory.create(
+                ProviderSpec(
+                    "worker",
+                    "local-ollama",
+                    {"command": "ollama", "model": "gemma4:e4b", "timeout_seconds": 60},
+                )
+            ).__class__.__name__,
+            "LocalOllamaProvider",
         )
-        self.assertEqual(provider.__class__.__name__, "CodexCliProvider")
 
 
 if __name__ == "__main__":
