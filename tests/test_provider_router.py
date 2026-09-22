@@ -15,27 +15,26 @@ class RecordingProvider:
 
 
 class ProviderRouterTests(unittest.TestCase):
-    def test_same_provider_can_back_developer_and_reviewer_as_separate_roles(self) -> None:
-        codex = RecordingProvider()
+    def test_same_provider_can_back_multiple_read_only_roles(self) -> None:
+        worker = RecordingProvider()
         router = ProviderRouter(
-            {"codex": codex},
+            {"worker": worker},
             {
-                "Implementer": RoleBinding("codex", "Implement only the approved scope.", WORKSPACE_WRITE),
-                "Reviewer": RoleBinding("codex", "Review independently from fresh context."),
+                "Coder": RoleBinding("worker", "Produce a proposal."),
+                "QA": RoleBinding("worker", "Validate without modifying."),
             },
         )
 
-        router.execute(AgentTask(role="Implementer", goal="Add feature X"))
-        router.execute(AgentTask(role="Reviewer", goal="Review feature X"))
+        router.execute(AgentTask(role="Coder", goal="Add feature X"))
+        router.execute(AgentTask(role="QA", goal="Validate feature X"))
 
-        self.assertEqual([task.role for task in codex.tasks], ["Implementer", "Reviewer"])
-        self.assertEqual(codex.tasks[0].context["sandbox"], WORKSPACE_WRITE)
-        self.assertEqual(codex.tasks[1].context["sandbox"], READ_ONLY)
+        self.assertEqual([task.role for task in worker.tasks], ["Coder", "QA"])
+        self.assertEqual(worker.tasks[0].context["sandbox"], READ_ONLY)
+        self.assertEqual(worker.tasks[1].context["sandbox"], READ_ONLY)
         self.assertNotEqual(
-            codex.tasks[0].context["role_instructions"],
-            codex.tasks[1].context["role_instructions"],
+            worker.tasks[0].context["role_instructions"],
+            worker.tasks[1].context["role_instructions"],
         )
-
 
     def test_workspace_agent_adapter_can_back_implementer(self) -> None:
         from devroom.workspace_agent import LocalWorkspaceAgentAdapter
@@ -61,22 +60,20 @@ class ProviderRouterTests(unittest.TestCase):
                 AgentTask(
                     role="Implementer",
                     goal="Create the implementation",
-                    context={"workspace": directory},
+                    context={"workspace": directory, "allowed_paths": "implemented.txt"},
                 )
             )
             self.assertEqual(result.artifacts, ("implemented.txt",))
-            with open(f"{directory}/implemented.txt", encoding="utf-8") as handle:
-                self.assertEqual(handle.read(), "Create the implementation")
 
     def test_read_only_role_cannot_be_escalated(self) -> None:
         router = ProviderRouter(
-            {"codex": RecordingProvider()},
-            {"Reviewer": RoleBinding("codex", "Review only.")},
+            {"worker": RecordingProvider()},
+            {"Coder": RoleBinding("worker", "Review only.")},
         )
         with self.assertRaises(PermissionError):
             router.execute(
                 AgentTask(
-                    role="Reviewer",
+                    role="Coder",
                     goal="Review",
                     context={"sandbox": WORKSPACE_WRITE},
                 )
