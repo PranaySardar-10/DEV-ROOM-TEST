@@ -7,6 +7,7 @@ from devroom.orchestrator import (
     DevRoomOrchestrator,
     HumanDecision,
     MockProvider,
+    ResourceGuard,
     Stage,
 )
 from devroom.state_store import JsonWorkflowStateStore, WorkflowStateWriter
@@ -168,6 +169,21 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             self.assertEqual(len(result.results), len(persisted.results))
             self.assertIsNone(persisted.halted_reason)
 
+    def test_resource_guard_cools_down_after_continuous_limit(self) -> None:
+        now = [0.0]
+        sleeps = []
+        def clock(): return now[0]
+        def sleeper(seconds):
+            sleeps.append(seconds)
+            now[0] += seconds
+        guard = ResourceGuard(cooldown_after_seconds=60.0, cooldown_seconds=45.0, clock=clock, sleeper=sleeper)
+        guard.before_agent()
+        now[0] = 59.0
+        self.assertFalse(guard.after_agent())
+        now[0] = 60.0
+        self.assertTrue(guard.after_agent())
+        self.assertEqual(sleeps, [45.0])
+        self.assertFalse(guard.after_agent())
     def test_blank_goal_workspace_and_scope_are_rejected(self) -> None:
         provider = MockProvider()
         with self.assertRaises(ValueError):
