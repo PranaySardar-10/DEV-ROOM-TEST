@@ -70,9 +70,15 @@ def build_default_factory() -> ProviderFactory:
         from .local_ollama_provider import LocalOllamaConfig, LocalOllamaProvider
         return LocalOllamaProvider(LocalOllamaConfig(**dict(options)))
 
+    def build_local_ollama_workspace(options: Mapping[str, Any]) -> AgentProvider:
+        from .local_ollama_workspace_agent import LocalOllamaWorkspaceAgent
+        from .workspace_agent import LocalWorkspaceAgentAdapter
+        return LocalWorkspaceAgentAdapter(LocalOllamaWorkspaceAgent(**dict(options)))
+
     factory.register("codex-cli", build_codex)
     factory.register("local-qwen-ollama", build_local_qwen)
     factory.register("local-ollama", build_local_ollama)
+    factory.register("local-ollama-workspace", build_local_ollama_workspace)
     return factory
 
 
