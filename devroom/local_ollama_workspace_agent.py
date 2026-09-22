@@ -65,18 +65,30 @@ class LocalOllamaWorkspaceAgent:
         if not isinstance(files, list) or not files:
             raise RuntimeError("Implementer response contained no file changes.")
 
-        written: list[str] = []
+        validated: list[tuple[str, str]] = []
+        seen: set[str] = set()
         for item in files:
             if not isinstance(item, dict):
                 raise RuntimeError("Every file change must be an object.")
-            relative_path = str(item.get("path", "")).replace("\\", "/")
+            relative_path = str(item.get("path", "")).replace("\\", "/").strip()
             content = item.get("content")
             if relative_path not in allowed:
                 raise PermissionError(
                     f"Implementer attempted to modify a path outside its approved scope: {relative_path!r}"
                 )
+            if relative_path in seen:
+                raise RuntimeError(f"Implementer returned duplicate file path: {relative_path!r}")
             if not isinstance(content, str):
                 raise RuntimeError(f"File content must be a string: {relative_path!r}")
+            seen.add(relative_path)
+            validated.append((relative_path, content))
+
+        # Validate the complete response before writing anything. This prevents
+        # a malformed second file entry from leaving the workspace partially changed.
+        for relative_path, content in validated:
+            workspace._safe_path(relative_path)
+        written: list[str] = []
+        for relative_path, content in validated:
             workspace.write_file(relative_path, content)
             written.append(relative_path)
 
@@ -104,7 +116,7 @@ class LocalOllamaWorkspaceAgent:
             source_files.append(
                 f"### {relative_path}\\n```text\\n{content}\\n```"
             )
-        source = "\\n\\n".join(source_files)
+        source = "\n\n".join(source_files)
         scope = ", ".join(sorted(allowed))
         return (
             "You are the DevRoom production Implementer. Integrate ONLY the approved "
