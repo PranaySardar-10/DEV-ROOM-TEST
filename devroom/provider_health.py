@@ -35,7 +35,7 @@ def diagnose_providers(
                     f"Codex CLI {'found' if available else 'not found'}: {command!r}.",
                 )
             )
-        elif spec.kind in {"local-qwen-ollama", "local-ollama"}:
+        elif spec.kind in {"local-qwen-ollama", "local-ollama", "local-ollama-workspace"}:
             command = str(spec.options.get("command", "ollama"))
             model = str(spec.options.get("model", ""))
             available = _command_available(command)
