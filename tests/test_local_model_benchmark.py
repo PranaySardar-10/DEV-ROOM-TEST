@@ -12,7 +12,6 @@ from devroom.local_model_benchmark import (
 
 
 class LocalModelBenchmarkTests(unittest.TestCase):
-    @patch("devroom.local_model_benchmark.LocalOllamaProvider")
     def test_default_suite_covers_unity_csharp_work(self) -> None:
         self.assertEqual(
             DEFAULT_MODEL_SUITE,
