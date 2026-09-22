@@ -86,7 +86,7 @@ def write_example_config(path: str | Path) -> Path:
         ],
         "bindings": {
             role: {
-                "provider": binding.provider,
+                "provider": "codex",
                 "instructions": binding.instructions,
                 "sandbox": binding.sandbox,
             }
