@@ -2,7 +2,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from devroom.orchestrator import AgentResult, DevRoomOrchestrator, HumanDecision, MockProvider, Stage
+from devroom.orchestrator import (
+    AgentResult,
+    DevRoomOrchestrator,
+    HumanDecision,
+    MockProvider,
+    Stage,
+)
 from devroom.state_store import JsonWorkflowStateStore, WorkflowStateWriter
 
 
@@ -10,66 +16,20 @@ class DevRoomOrchestratorTests(unittest.TestCase):
     def approve_all(self, stage, prompt, context):
         return HumanDecision.APPROVE, ""
 
-    def test_workflow_without_human_confirmation_halts_after_report(self) -> None:
+    def test_workflow_without_human_review_halts_before_implementation(self) -> None:
+        provider = MockProvider()
+        result = DevRoomOrchestrator(provider).run("Implement vehicle ownership")
+        self.assertEqual(result.stage, Stage.HALTED)
+        self.assertIn(Stage.HUMAN_REVIEW, result.history)
+        self.assertNotIn(Stage.IMPLEMENTER, result.history)
+        self.assertEqual([task.role for task in provider.calls], ["Lead", "Architect", "Coder"])
+
+    def test_approval_precedes_implementation(self) -> None:
         provider = MockProvider()
         result = DevRoomOrchestrator(provider).run(
-            "Implement persistent vehicle ownership",
+            "Implement vehicle ownership",
             workspace=r"D:\DEV_ROOM_TEST",
-        )
-        self.assertEqual(result.stage, Stage.HALTED)
-        self.assertIn(Stage.HUMAN_CONFIRMATION, result.history)
-        self.assertEqual(len(provider.calls), 6)
-
-    def test_final_confirmation_persists_after_callback(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "workflow.json"
-            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-callback")
-            provider = MockProvider()
-            seen = []
-
-            def gate(stage, prompt, context):
-                persisted = JsonWorkflowStateStore(path).load("workflow-callback")
-                seen.append((stage, persisted.last_decision))
-                return HumanDecision.HALT, "stop"
-
-            result = DevRoomOrchestrator(
-                provider,
-                state_writer=writer,
-            ).run(
-                "Persist callback ordering",
-                human_gate=gate,
-            )
-            final_state = JsonWorkflowStateStore(path).load("workflow-callback")
-            self.assertEqual(result.stage, Stage.HALTED)
-            self.assertEqual(seen, [(Stage.HUMAN_CONFIRMATION, None)])
-            self.assertEqual(final_state.last_decision, HumanDecision.HALT.value)
-            self.assertEqual(final_state.last_feedback, "stop")
-
-    def test_missing_implementation_artifacts_halt_before_review(self) -> None:
-        class EmptyImplementerProvider(MockProvider):
-            def execute(self, task):
-                self.calls.append(task)
-                if task.role == "Implementer":
-                    return AgentResult(role=task.role, summary="No implementation was produced.")
-                return AgentResult(role=task.role, summary=f"Mock {task.role} completed.", artifacts=("mock",))
-
-        provider = EmptyImplementerProvider()
-        result = DevRoomOrchestrator(provider).run(
-            "Require implementation proof",
-            human_gate=self.approve_all,
-        )
-        self.assertEqual(result.stage, Stage.HALTED)
-        self.assertIn("implementation artifacts", result.halted_reason or "")
-        self.assertEqual(
-            [task.role for task in provider.calls],
-            ["Lead", "Architect", "Implementer"],
-        )
-
-    def test_full_workflow_reaches_complete_after_final_confirmation(self) -> None:
-        provider = MockProvider()
-        result = DevRoomOrchestrator(provider).run(
-            "Implement persistent vehicle ownership",
-            workspace=r"D:\DEV_ROOM_TEST",
+            allowed_paths=("Assets/Scripts/VehicleOwnership.cs",),
             human_gate=self.approve_all,
         )
         self.assertEqual(result.stage, Stage.COMPLETE)
@@ -78,94 +38,117 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             [
                 Stage.LEAD,
                 Stage.ARCHITECT,
+                Stage.CODER,
+                Stage.HUMAN_REVIEW,
                 Stage.IMPLEMENTER,
-                Stage.REVIEWER,
                 Stage.QA,
-                Stage.LEAD_REPORT,
-                Stage.HUMAN_CONFIRMATION,
+                Stage.UNITY_VALIDATION,
                 Stage.COMPLETE,
             ],
         )
-        self.assertEqual(len(provider.calls), 6)
+        roles = [task.role for task in provider.calls]
+        self.assertEqual(
+            roles,
+            ["Lead", "Architect", "Coder", "Implementer", "QA"],
+        )
         self.assertTrue(
             all(task.context["workspace"] == r"D:\DEV_ROOM_TEST" for task in provider.calls)
         )
-
-    def test_reviewer_gets_independent_context(self) -> None:
-        provider = MockProvider()
-        DevRoomOrchestrator(provider).run(
-            "Implement persistent vehicle ownership",
-            workspace=r"D:\DEV_ROOM_TEST",
-            human_gate=self.approve_all,
+        self.assertTrue(
+            all(task.context["allowed_paths"] == "Assets/Scripts/VehicleOwnership.cs"
+                for task in provider.calls)
         )
-        reviewer = provider.calls[3]
-        self.assertEqual(reviewer.role, "Reviewer")
-        self.assertIn("architecture_summary", reviewer.context)
-        self.assertNotIn("implementation_summary", reviewer.context)
-        self.assertNotIn("human_feedback", reviewer.context)
 
-    def test_implementation_feedback_triggers_new_implementation_cycle(self) -> None:
+    def test_proposal_rejection_returns_to_coder(self) -> None:
         provider = MockProvider()
         decisions = iter([
-            (HumanDecision.REQUEST_CHANGES, "The vehicle clips through the road in Unity."),
+            (HumanDecision.REQUEST_CHANGES, "Split persistence from runtime state."),
+            (HumanDecision.APPROVE, ""),
             (HumanDecision.APPROVE, ""),
         ])
-
         result = DevRoomOrchestrator(provider).run(
-            "Implement vehicle suspension",
-            workspace=r"D:\DEV_ROOM_TEST",
+            "Implement vehicle ownership",
             human_gate=lambda stage, prompt, context: next(decisions),
         )
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            [task.role for task in provider.calls],
+            ["Lead", "Architect", "Coder", "Coder", "Implementer", "QA"],
+        )
+        self.assertEqual(
+            provider.calls[3].context["revision_instruction"],
+            "Split persistence from runtime state.",
+        )
 
+    def test_unity_failure_returns_to_coder(self) -> None:
+        provider = MockProvider()
+        decisions = iter([
+            (HumanDecision.APPROVE, ""),
+            (HumanDecision.REQUEST_CHANGES, "The vehicle is not persisted after restart."),
+            (HumanDecision.APPROVE, ""),
+            (HumanDecision.APPROVE, ""),
+        ])
+        result = DevRoomOrchestrator(provider).run(
+            "Implement persistent vehicle ownership",
+            human_gate=lambda stage, prompt, context: next(decisions),
+        )
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
             [task.role for task in provider.calls],
             [
-                "Lead",
-                "Architect",
-                "Implementer",
-                "Reviewer",
-                "QA",
-                "Lead",
-                "Implementer",
-                "Reviewer",
-                "QA",
-                "Lead",
+                "Lead", "Architect", "Coder", "Implementer", "QA",
+                "Coder", "Implementer", "QA",
             ],
         )
-        second_implementation = provider.calls[6]
         self.assertEqual(
-            second_implementation.context["human_feedback"],
-            "The vehicle clips through the road in Unity.",
+            provider.calls[5].context["revision_instruction"],
+            "The vehicle is not persisted after restart.",
+        )
+
+    def test_empty_coder_halts_before_review(self) -> None:
+        class EmptyCoder(MockProvider):
+            def execute(self, task):
+                self.calls.append(task)
+                if task.role == "Coder":
+                    return AgentResult(role=task.role, summary="No proposal.")
+                return super().execute(task)
+
+        result = DevRoomOrchestrator(EmptyCoder()).run("Build a feature")
+        self.assertEqual(result.stage, Stage.HALTED)
+        self.assertIn("reviewable implementation proposal", result.halted_reason or "")
+
+    def test_empty_implementer_halts_before_qa(self) -> None:
+        class EmptyImplementer(MockProvider):
+            def execute(self, task):
+                self.calls.append(task)
+                if task.role == "Implementer":
+                    return AgentResult(role=task.role, summary="No integration.")
+                return super().execute(task)
+
+        provider = EmptyImplementer()
+        result = DevRoomOrchestrator(provider).run(
+            "Build a feature",
+            human_gate=self.approve_all,
+        )
+        self.assertEqual(result.stage, Stage.HALTED)
+        self.assertIn("integration artifacts", result.halted_reason or "")
+        self.assertEqual(
+            [task.role for task in provider.calls],
+            ["Lead", "Architect", "Coder", "Implementer"],
         )
 
     def test_human_halt_stops_workflow(self) -> None:
         provider = MockProvider()
         result = DevRoomOrchestrator(provider).run(
-            "Implement persistent vehicle ownership",
+            "Build a feature",
             human_gate=lambda stage, prompt, context: (
                 HumanDecision.HALT,
-                "Keep the change isolated for now.",
+                "Stop this task.",
             ),
         )
         self.assertEqual(result.stage, Stage.HALTED)
-        self.assertIn(Stage.HUMAN_CONFIRMATION, result.history)
-        self.assertNotIn(Stage.COMPLETE, result.history)
-
-    def test_feedback_cycle_limit_halts(self) -> None:
-        provider = MockProvider()
-        result = DevRoomOrchestrator(
-            provider,
-        ).run(
-            "Implement visual feature",
-            max_feedback_cycles=1,
-            human_gate=lambda stage, prompt, context: (
-                HumanDecision.REQUEST_CHANGES,
-                "Fix it again.",
-            ),
-        )
-        self.assertEqual(result.stage, Stage.HALTED)
-        self.assertIn("Maximum human feedback cycles", result.halted_reason or "")
+        self.assertIn(Stage.HUMAN_REVIEW, result.history)
+        self.assertNotIn(Stage.IMPLEMENTER, result.history)
 
     def test_persists_final_workflow_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -185,12 +168,14 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             self.assertEqual(len(result.results), len(persisted.results))
             self.assertIsNone(persisted.halted_reason)
 
-    def test_blank_goal_and_workspace_are_rejected(self) -> None:
+    def test_blank_goal_workspace_and_scope_are_rejected(self) -> None:
         provider = MockProvider()
         with self.assertRaises(ValueError):
             DevRoomOrchestrator(provider).run("  ")
         with self.assertRaises(ValueError):
             DevRoomOrchestrator(provider).run("Goal", workspace="  ")
+        with self.assertRaises(ValueError):
+            DevRoomOrchestrator(provider).run("Goal", allowed_paths=("",))
 
 
 if __name__ == "__main__":
