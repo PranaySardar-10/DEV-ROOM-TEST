@@ -40,7 +40,7 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = write_example_config(Path(tmp) / "devroom.example.json")
             config = load_config(path)
-            self.assertEqual(config.providers[0].kind, "codex-cli")
+            self.assertEqual(config.providers[0].kind, "local-ollama")
             self.assertEqual(config.bindings["Implementer"].sandbox, "workspace-write")
 
 
