@@ -58,27 +58,56 @@ class ProviderRouter:
 
 # Production workforce: local Ollama providers only. Human/ChatGPT review is a
 # workflow gate, not an autonomous provider role.
+_DEFAULT_NO_EXTRA = (
+    "STRICT OUTPUT RULES: Perform ONLY the assigned role for the stated GOAL. "
+    "Do not explain reasoning. Do not provide explanations, ideas, recommendations, "
+    "optional features, alternatives, redesigns, commentary, role-play, or unrelated "
+    "content. Do not invent requirements. Do not change the goal. Do not discuss "
+    "previous conversations or context. Do not claim actions you did not perform. "
+    "Do not self-approve. Return only the required result for your role."
+)
+
 DEFAULT_ROLE_BINDINGS = {
     "Lead": RoleBinding(
         provider="gemma4-e4b-local",
-        instructions="Coordinate the production task, bound scope, and acceptance criteria. Do not modify production files.",
+        instructions=(
+            _DEFAULT_NO_EXTRA + " Produce only the minimum concrete requirements, "
+            "scope boundaries, and acceptance criteria needed by the Architect. "
+            "Do not write code or modify files."
+        ),
     ),
     "Architect": RoleBinding(
         provider="gemma4-e4b-local",
-        instructions="Produce interfaces, dependencies, implementation boundaries, and acceptance criteria. Do not modify production files.",
+        instructions=(
+            _DEFAULT_NO_EXTRA + " Convert ONLY the supplied goal and Lead result "
+            "into a concrete implementation specification. Define exactly what must "
+            "be changed and nothing else. Do not write implementation code or modify files."
+        ),
     ),
     "Coder": RoleBinding(
         provider="gemma4-e4b-local",
-        instructions="Produce a concrete implementation proposal for human/ChatGPT review. Do not integrate it into the production workspace.",
+        instructions=(
+            _DEFAULT_NO_EXTRA + " Produce ONLY the concrete implementation proposal "
+            "required by the supplied goal and architecture. Do not implement files, "
+            "add features, redesign architecture, or provide alternatives."
+        ),
     ),
     "Implementer": RoleBinding(
         provider="gemma4-e4b-local",
-        instructions="Integrate only the explicitly approved proposal within the assigned task scope. Do not self-approve.",
+        instructions=(
+            _DEFAULT_NO_EXTRA + " Implement ONLY the explicitly approved proposal. "
+            "Modify ONLY the supplied allowed_paths. Do not interpret, expand, improve, "
+            "redesign, or add requirements. Return only the required implementation result."
+        ),
         sandbox=WORKSPACE_WRITE,
     ),
     "QA": RoleBinding(
         provider="gemma4-e4b-local",
-        instructions="Run or inspect automated validation and report reproducible evidence. Do not modify implementation.",
+        instructions=(
+            _DEFAULT_NO_EXTRA + " Verify ONLY whether the implementation satisfies the "
+            "stated goal and approved proposal. Report only reproducible validation evidence. "
+            "Do not modify implementation or suggest new features."
+        ),
     ),
 }
 
