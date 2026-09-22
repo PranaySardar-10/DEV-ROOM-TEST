@@ -11,10 +11,8 @@ class LocalWorkspaceProviderTests(unittest.TestCase):
             root = Path(directory)
             (root / ".git").mkdir()
             provider = LocalWorkspaceProvider(root)
-
             provider.write_file("src/example.txt", "hello")
             self.assertEqual(provider.read_file("src/example.txt"), "hello")
-
             snapshot = provider.inspect()
             self.assertEqual(snapshot["workspace"], str(root.resolve()))
             self.assertIn("src/example.txt", snapshot["files"])
@@ -25,7 +23,6 @@ class LocalWorkspaceProviderTests(unittest.TestCase):
             root = Path(directory)
             (root / ".git").mkdir()
             provider = LocalWorkspaceProvider(root)
-
             with self.assertRaises(ValueError):
                 provider.read_file("../outside.txt")
             with self.assertRaises(PermissionError):
@@ -41,16 +38,10 @@ class LocalWorkspaceProviderTests(unittest.TestCase):
     def test_run_command_requires_explicit_approval(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             provider = LocalWorkspaceProvider(directory)
-
             with self.assertRaises(PermissionError):
-                provider.run_command(
-                    ("python", "-c", "print('x')"),
-                    approved_executables=("git",),
-                )
-
+                provider.run_command(("python", "-c", "print('x')"), approved_executables=("git",))
             result = provider.run_command(
-                ("python", "-c", "print('x')"),
-                approved_executables=("python",),
+                ("python", "-c", "print('x')"), approved_executables=("python",)
             )
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout.strip(), "x")
@@ -58,14 +49,12 @@ class LocalWorkspaceProviderTests(unittest.TestCase):
     def test_run_command_captures_failure_and_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             provider = LocalWorkspaceProvider(directory)
-
             failed = provider.run_command(
                 ("python", "-c", "import sys; print('bad', file=sys.stderr); sys.exit(2)"),
                 approved_executables=("python",),
             )
             self.assertEqual(failed.returncode, 2)
             self.assertIn("bad", failed.stderr)
-
             with self.assertRaises(TimeoutError):
                 provider.run_command(
                     ("python", "-c", "import time; time.sleep(1)"),
@@ -76,11 +65,10 @@ class LocalWorkspaceProviderTests(unittest.TestCase):
     def test_git_diff_is_available_for_repository_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             provider = LocalWorkspaceProvider(directory)
-            provider.run_command(
-                ("git", "init"),
-                approved_executables=("git",),
-            )
-            provider.write_file("changed.txt", "change")
+            provider.run_command(("git", "init"), approved_executables=("git",))
+            provider.write_file("changed.txt", "original")
+            provider.run_command(("git", "add", "changed.txt"), approved_executables=("git",))
+            provider.write_file("changed.txt", "modified")
             self.assertIn("changed.txt", provider.git_diff())
 
 
