@@ -17,6 +17,16 @@ class BootstrapTests(unittest.TestCase):
         factory.register("fake", lambda _: RecordingProvider())
         return factory
 
+    def _bindings(self):
+        return {
+            role: RoleBinding(
+                "worker",
+                f"{role} instructions",
+                "workspace-write" if role == "Implementer" else "read-only",
+            )
+            for role in ("Lead", "Architect", "Coder", "Implementer", "QA")
+        }
+
     def test_builds_registry_from_specs(self) -> None:
         registry = build_provider_registry(
             [ProviderSpec("worker", "fake")],
@@ -25,13 +35,9 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(registry.snapshot(), ("worker",))
 
     def test_builds_orchestrator_from_configuration(self) -> None:
-        bindings = {
-            role: RoleBinding("worker", f"{role} instructions")
-            for role in ("Lead", "Architect", "Implementer", "Reviewer", "QA")
-        }
         orchestrator = build_orchestrator(
             [ProviderSpec("worker", "fake")],
-            bindings=bindings,
+            bindings=self._bindings(),
             factory=self._factory(),
         )
         result = orchestrator.run("bootstrap test")
