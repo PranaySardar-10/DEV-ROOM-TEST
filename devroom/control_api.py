@@ -50,6 +50,7 @@ class WorkflowController:
         workflow_id: str,
         goal: str,
         workspace: str | None = None,
+        allowed_paths: tuple[str, ...] = (),
         state_writer: WorkflowStateWriter | None = None,
         max_feedback_cycles: int = 3,
     ) -> None:
@@ -63,6 +64,7 @@ class WorkflowController:
         self._workflow_id = workflow_id
         self._goal = goal
         self._workspace = workspace
+        self._allowed_paths = allowed_paths
         self._state_writer = state_writer
         self._max_feedback_cycles = max_feedback_cycles
         self._pending: tuple[HumanDecision, str] | None = None
@@ -154,6 +156,7 @@ class WorkflowController:
             result = orchestrator.run(
                 self._goal,
                 workspace=self._workspace,
+                allowed_paths=self._allowed_paths,
                 human_gate=self._gate,
                 max_feedback_cycles=self._max_feedback_cycles,
             )
