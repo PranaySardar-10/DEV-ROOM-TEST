@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from devroom.config import load_config, write_example_config
+from devroom.config import load_config, validate_config, write_example_config
 
 
 class ConfigTests(unittest.TestCase):
@@ -11,15 +11,14 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "devroom.json"
             path.write_text(json.dumps({
-                "providers": [
-                    {"name": "worker", "kind": "fake", "options": {"label": "test"}}
-                ],
+                "providers": [{"name": "worker", "kind": "fake", "options": {"label": "test"}}],
                 "bindings": {
-                    "Implementer": {
+                    role: {
                         "provider": "worker",
-                        "instructions": "Implement only.",
-                        "sandbox": "workspace-write",
+                        "instructions": f"{role} instructions",
+                        "sandbox": "workspace-write" if role == "Implementer" else "read-only",
                     }
+                    for role in ("Lead", "Architect", "Coder", "Implementer", "QA")
                 },
             }), encoding="utf-8")
 
@@ -27,7 +26,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.providers[0].name, "worker")
             self.assertEqual(config.providers[0].kind, "fake")
             self.assertEqual(config.providers[0].options["label"], "test")
-            self.assertEqual(config.bindings["Implementer"].sandbox, "workspace-write")
+            validate_config(config)
 
     def test_default_bindings_are_used_when_omitted(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -40,6 +39,7 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = write_example_config(Path(tmp) / "devroom.example.json")
             config = load_config(path)
+            validate_config(config)
             self.assertEqual(config.providers[0].kind, "local-ollama")
             self.assertEqual(config.bindings["Implementer"].sandbox, "workspace-write")
 
