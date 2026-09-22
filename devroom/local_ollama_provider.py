@@ -52,7 +52,8 @@ class LocalOllamaProvider(AgentProvider):
             raise RuntimeError(
                 f"Local Ollama model {self.config.model!r} returned empty output."
             )
-        return AgentResult(role=task.role, summary=summary)
+        artifacts = ("implementation-proposal",) if task.role == "Coder" else ()
+        return AgentResult(role=task.role, summary=summary, artifacts=artifacts)
 
     @staticmethod
     def _build_prompt(task: AgentTask) -> str:
