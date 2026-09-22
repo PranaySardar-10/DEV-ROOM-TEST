@@ -44,7 +44,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.providers[1].options["model"], "qwen3.5:4b")
             self.assertEqual(
                 config.bindings["Implementer"].provider,
-                "qwen3.5-4b-workspace-local",
+                "gemma4-e4b-local",
             )
             self.assertEqual(config.bindings["Implementer"].sandbox, "workspace-write")
 
