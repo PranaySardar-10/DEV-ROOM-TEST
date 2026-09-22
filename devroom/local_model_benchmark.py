@@ -8,12 +8,8 @@ from typing import Iterable, Mapping
 from .local_ollama_provider import LocalOllamaConfig, LocalOllamaProvider
 from .orchestrator import AgentTask
 
-DEFAULT_MODEL_SUITE: tuple[str, ...] = (
-    "qwen3.5:4b",
-    "qwen3.5:3b",
-    "qwen3.5:1.5b",
-    "gemma4:e4b",
-)
+DEFAULT_MODEL_SUITE: tuple[str, ...] = ("gemma4:e4b",)
+DEFAULT_BENCHMARK_IDS: tuple[str, ...] = ("architecture", "implementation")
 
 UNITY_CSHARP_BENCHMARKS: tuple[Mapping[str, str], ...] = (
     {
@@ -107,15 +103,24 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="Benchmark local Unity/C# Ollama models.")
     parser.add_argument("--models", nargs="+", default=list(DEFAULT_MODEL_SUITE))
+    parser.add_argument(
+        "--tasks",
+        nargs="+",
+        default=list(DEFAULT_BENCHMARK_IDS),
+        choices=[item["id"] for item in UNITY_CSHARP_BENCHMARKS],
+        help="Benchmark task IDs. The default is a small smoke benchmark.",
+    )
     parser.add_argument("--command", default="ollama")
-    parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--output", default="local-model-benchmark.json")
     args = parser.parse_args()
 
+    selected = [item for item in UNITY_CSHARP_BENCHMARKS if item["id"] in set(args.tasks)]
     results = benchmark_models(
         args.models,
         command=args.command,
         timeout_seconds=args.timeout,
+        benchmarks=selected,
     )
     write_benchmark_report(results, args.output)
     for model_result in results:
@@ -133,6 +138,7 @@ if __name__ == "__main__":
 
 __all__ = [
     "DEFAULT_MODEL_SUITE",
+    "DEFAULT_BENCHMARK_IDS",
     "UNITY_CSHARP_BENCHMARKS",
     "benchmark_models",
     "write_benchmark_report",
