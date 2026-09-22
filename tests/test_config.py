@@ -41,10 +41,12 @@ class ConfigTests(unittest.TestCase):
             config = load_config(path)
             validate_config(config)
             self.assertEqual(config.providers[0].kind, "local-ollama")
-            self.assertEqual(config.providers[1].options["model"], "qwen3.5:4b")
+            self.assertEqual(config.providers[1].kind, "local-ollama-workspace")
+            self.assertEqual(config.providers[1].options["model"], "gemma4:e4b")
+            self.assertEqual(config.providers[2].options["model"], "qwen3.5:4b")
             self.assertEqual(
                 config.bindings["Implementer"].provider,
-                "gemma4-e4b-local",
+                "gemma4-e4b-workspace-local",
             )
             self.assertEqual(config.bindings["Implementer"].sandbox, "workspace-write")
 
