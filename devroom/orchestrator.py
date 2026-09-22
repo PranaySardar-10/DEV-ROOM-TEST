@@ -99,9 +99,10 @@ class WorkflowResult:
 class DevRoomOrchestrator:
     """Production factory workflow with human approval before integration and Unity validation."""
 
-    def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None) -> None:
+    def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None, resource_guard: ResourceGuard | None = None) -> None:
         self.provider = provider
         self.state_writer = state_writer
+        self.resource_guard = resource_guard or ResourceGuard()
 
     @classmethod
     def with_provider_registry(
