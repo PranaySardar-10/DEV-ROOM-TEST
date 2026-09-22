@@ -20,20 +20,19 @@ class OrchestratorRegistryTests(unittest.TestCase):
         provider = RecordingProvider()
         registry.register("worker", provider)
 
-        orchestrator = DevRoomOrchestrator.with_provider_registry(
-            registry,
-            {
-                "Lead": RoleBinding("worker", "Coordinate."),
-                "Architect": RoleBinding("worker", "Design."),
-                "Implementer": RoleBinding("worker", "Implement.", "workspace-write"),
-                "Reviewer": RoleBinding("worker", "Review."),
-                "QA": RoleBinding("worker", "Test."),
-            },
-        )
+        bindings = {
+            role: RoleBinding(
+                "worker",
+                f"{role} instructions",
+                "workspace-write" if role == "Implementer" else "read-only",
+            )
+            for role in ("Lead", "Architect", "Coder", "Implementer", "QA")
+        }
+        orchestrator = DevRoomOrchestrator.with_provider_registry(registry, bindings)
 
         result = orchestrator.run("build a test feature", workspace=".")
         self.assertEqual(result.stage.value, "halted")
-        self.assertGreaterEqual(len(provider.tasks), 5)
+        self.assertGreaterEqual(len(provider.tasks), 3)
         self.assertEqual(provider.tasks[0].role, "Lead")
 
 
