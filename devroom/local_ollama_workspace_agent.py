@@ -35,7 +35,7 @@ class LocalOllamaWorkspaceAgent:
         if not allowed:
             raise ValueError("Implementer requires an explicit allowed_paths scope.")
 
-        prompt = self._build_prompt(task, allowed)
+        prompt = self._build_prompt(task, allowed, workspace)
         try:
             completed = subprocess.run(
                 (self.command, "run", self.model, prompt),
@@ -90,19 +90,32 @@ class LocalOllamaWorkspaceAgent:
         )
 
     @staticmethod
-    def _build_prompt(task: AgentTask, allowed: set[str]) -> str:
+    def _build_prompt(task: AgentTask, allowed: set[str], workspace: LocalWorkspaceProvider) -> str:
         context = "\n".join(
             f"- {key}: {value}" for key, value in sorted(task.context.items())
             if key not in {"sandbox"}
         )
+        source_files: list[str] = []
+        for relative_path in sorted(allowed):
+            try:
+                content = workspace.read_file(relative_path)
+            except FileNotFoundError:
+                content = "<file does not exist yet>"
+            source_files.append(
+                f"### {relative_path}\\n```text\\n{content}\\n```"
+            )
+        source = "\\n\\n".join(source_files)
         scope = ", ".join(sorted(allowed))
         return (
             "You are the DevRoom production Implementer. Integrate ONLY the approved "
             "implementation into the assigned workspace. Do not self-approve.\n\n"
             f"ROLE: {task.role}\nGOAL: {task.goal}\n"
-            f"APPROVED FILE SCOPE: {scope}\nCONTEXT:\n{context}\n\n"
+            f"APPROVED FILE SCOPE: {scope}\nCONTEXT:\n{context or '- none'}\n\n"
+            "CURRENT CONTENT OF APPROVED FILES:\n"
+            f"{source}\n\n"
             "Return ONLY valid JSON with this exact shape: "
             '{"summary":"short evidence-based summary","files":[{"path":"relative/path","content":"complete file content"}]}. '
+            "Return complete replacement content for every file you modify. "
             "Every path must be one of the approved paths. Do not use markdown fences."
         )
 
