@@ -38,7 +38,7 @@ class LocalOllamaWorkspaceAgent:
         prompt = self._build_prompt(task, allowed, workspace)
         try:
             completed = subprocess.run(
-                (self.command, "run", self.model, prompt),
+                (self.command, "run", self.model, "--format", "json", prompt),
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
