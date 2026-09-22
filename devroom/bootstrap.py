@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Mapping
 
-from .config import DevRoomConfig, load_config
+from .config import DevRoomConfig, load_config, validate_config
 from .orchestrator import AgentProvider, DevRoomOrchestrator
 from .provider_factory import ProviderFactory, ProviderSpec, build_default_factory
 from .provider_registry import ProviderRegistry
@@ -40,6 +40,7 @@ def build_from_config(
     factory: ProviderFactory | None = None,
 ) -> DevRoomOrchestrator:
     """Construct the complete execution stack from a loaded DevRoom config."""
+    validate_config(config)
     return build_orchestrator(
         config.providers,
         bindings=config.bindings,
