@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from devroom.local_ollama_workspace_agent import LocalOllamaWorkspaceAgent
 from devroom.orchestrator import AgentTask
