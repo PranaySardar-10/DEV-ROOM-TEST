@@ -41,11 +41,12 @@ def build_from_config(
 ) -> DevRoomOrchestrator:
     """Construct the complete execution stack from a loaded DevRoom config."""
     validate_config(config)
-    return build_orchestrator(
-        config.providers,
-        bindings=config.bindings,
-        factory=factory,
+    orchestrator = build_orchestrator(config.providers, bindings=config.bindings, factory=factory)
+    orchestrator.resource_guard = ResourceGuard(
+        cooldown_after_seconds=config.cooldown_after_seconds,
+        cooldown_seconds=config.cooldown_seconds,
     )
+    return orchestrator
 
 
 def build_from_config_file(
