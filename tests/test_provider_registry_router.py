@@ -35,7 +35,8 @@ class ProviderRegistryRouterTests(unittest.TestCase):
         )
 
         self.assertEqual(result.artifacts, ("artifact",))
-        self.assertIs(provider.tasks[0], provider.tasks[0])
+        self.assertEqual(provider.tasks[0].role, "Implementer")
+        self.assertEqual(provider.tasks[0].context["sandbox"], "workspace-write")
 
 
 if __name__ == "__main__":
