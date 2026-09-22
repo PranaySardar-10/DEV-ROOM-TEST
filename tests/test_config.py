@@ -41,6 +41,11 @@ class ConfigTests(unittest.TestCase):
             config = load_config(path)
             validate_config(config)
             self.assertEqual(config.providers[0].kind, "local-ollama")
+            self.assertEqual(config.providers[1].options["model"], "qwen3.5:4b")
+            self.assertEqual(
+                config.bindings["Implementer"].provider,
+                "qwen3.5-4b-workspace-local",
+            )
             self.assertEqual(config.bindings["Implementer"].sandbox, "workspace-write")
 
 
