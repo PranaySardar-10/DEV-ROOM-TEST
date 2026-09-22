@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Mapping
 
+from .config import DevRoomConfig, load_config
 from .orchestrator import AgentProvider, DevRoomOrchestrator
 from .provider_factory import ProviderFactory, ProviderSpec, build_default_factory
 from .provider_registry import ProviderRegistry
@@ -13,7 +15,7 @@ def build_provider_registry(
     *,
     factory: ProviderFactory | None = None,
 ) -> ProviderRegistry:
-    """Build the named provider registry from external configuration."""
+    """Build the named provider registry from explicit provider specifications."""
     active_factory = factory or build_default_factory()
     return active_factory.build_registry(specs)
 
@@ -24,7 +26,7 @@ def build_orchestrator(
     bindings: Mapping[str, RoleBinding] | None = None,
     factory: ProviderFactory | None = None,
 ) -> DevRoomOrchestrator:
-    """Construct the execution stack without hardcoding provider instances."""
+    """Construct the execution stack from provider specifications."""
     registry = build_provider_registry(specs, factory=factory)
     return DevRoomOrchestrator.with_provider_registry(
         registry,
@@ -32,4 +34,31 @@ def build_orchestrator(
     )
 
 
-__all__ = ["build_orchestrator", "build_provider_registry"]
+def build_from_config(
+    config: DevRoomConfig,
+    *,
+    factory: ProviderFactory | None = None,
+) -> DevRoomOrchestrator:
+    """Construct the complete execution stack from a loaded DevRoom config."""
+    return build_orchestrator(
+        config.providers,
+        bindings=config.bindings,
+        factory=factory,
+    )
+
+
+def build_from_config_file(
+    path: str | Path,
+    *,
+    factory: ProviderFactory | None = None,
+) -> DevRoomOrchestrator:
+    """Load a JSON config file and construct the complete execution stack."""
+    return build_from_config(load_config(path), factory=factory)
+
+
+__all__ = [
+    "build_from_config",
+    "build_from_config_file",
+    "build_orchestrator",
+    "build_provider_registry",
+]
