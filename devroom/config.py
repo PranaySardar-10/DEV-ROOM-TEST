@@ -143,11 +143,7 @@ def write_example_config(path: str | Path) -> Path:
         ],
         "bindings": {
             role: {
-                "provider": (
-                    "qwen3.5-4b-workspace-local"
-                    if role == "Implementer"
-                    else binding.provider
-                ),
+                "provider": "gemma4-e4b-local",
                 "instructions": binding.instructions,
                 "sandbox": binding.sandbox,
             }
