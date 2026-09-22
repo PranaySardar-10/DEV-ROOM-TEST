@@ -94,26 +94,17 @@ def validate_config(config: DevRoomConfig) -> None:
 
 
 def write_example_config(path: str | Path) -> Path:
-    """Write a provider-neutral starter configuration."""
+    """Write the local-agent production configuration."""
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, Any] = {
         "providers": [
             {
-                "name": "codex",
-                "kind": "codex-cli",
-                "options": {
-                    "command": "codex",
-                    "ephemeral": True,
-                    "timeout_seconds": 3600,
-                },
-            },
-            {
-                "name": "qwen3.5-4b-local",
+                "name": "gemma4-e4b-local",
                 "kind": "local-ollama",
                 "options": {
                     "command": "ollama",
-                    "model": "qwen3.5:4b",
+                    "model": "gemma4:e4b",
                     "timeout_seconds": 600,
                 },
             },
@@ -127,31 +118,18 @@ def write_example_config(path: str | Path) -> Path:
                 },
             },
             {
-                "name": "qwen3.5-1.5b-local",
+                "name": "qwen3.5-4b-local",
                 "kind": "local-ollama",
                 "options": {
                     "command": "ollama",
-                    "model": "qwen3.5:1.5b",
-                    "timeout_seconds": 600,
-                },
-            },
-            {
-                "name": "gemma4-e4b-local",
-                "kind": "local-ollama",
-                "options": {
-                    "command": "ollama",
-                    "model": "gemma4:e4b",
+                    "model": "qwen3.5:4b",
                     "timeout_seconds": 600,
                 },
             },
         ],
         "bindings": {
             role: {
-                "provider": (
-                    "qwen3.5-4b-local"
-                    if binding.provider == "qwen2.5-coder-3b-local"
-                    else binding.provider
-                ),
+                "provider": binding.provider,
                 "instructions": binding.instructions,
                 "sandbox": binding.sandbox,
             }
