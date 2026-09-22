@@ -134,15 +134,33 @@ class LocalOllamaWorkspaceAgent:
     @staticmethod
     def _parse_payload(output: str) -> dict[str, Any]:
         text = output.strip()
+        if not text:
+            raise RuntimeError(
+                "Implementer returned empty output; no workspace files were changed."
+            )
         try:
             payload = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(
-                "Implementer returned non-JSON output; no workspace files were changed."
-            ) from exc
+        except json.JSONDecodeError:
+            payload = LocalOllamaWorkspaceAgent._extract_json_object(text)
         if not isinstance(payload, dict):
             raise RuntimeError("Implementer JSON response must be an object.")
         return payload
 
+    @staticmethod
+    def _extract_json_object(text: str) -> dict[str, Any]:
+        decoder = json.JSONDecoder()
+        for start, char in enumerate(text):
+            if char != "{":
+                continue
+            try:
+                candidate, _end = decoder.raw_decode(text[start:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict) and isinstance(candidate.get("files"), list):
+                return candidate
+        raise RuntimeError(
+            "Implementer returned no valid JSON artifact payload; "
+            "no workspace files were changed."
+        )
 
 __all__ = ["LocalOllamaWorkspaceAgent"]
