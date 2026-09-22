@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 from .provider_factory import ProviderSpec
 from .provider_router import DEFAULT_ROLE_BINDINGS, RoleBinding
+from .sandbox_policy import READ_ONLY, WORKSPACE_WRITE
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,30 @@ def load_config(path: str | Path) -> DevRoomConfig:
     return DevRoomConfig(tuple(providers), bindings)
 
 
+
+def validate_config(config: DevRoomConfig) -> None:
+    """Validate cross-references and execution constraints before startup."""
+    names = [spec.name.strip() for spec in config.providers]
+    if any(not name for name in names):
+        raise ValueError("Every provider must have a non-blank name.")
+    if len(names) != len(set(names)):
+        raise ValueError("Provider names must be unique.")
+
+    known = set(names)
+    for role, binding in config.bindings.items():
+        if not role.strip():
+            raise ValueError("Role names must not be blank.")
+        if not binding.provider.strip():
+            raise ValueError(f"Binding for {role!r} has a blank provider.")
+        if binding.provider not in known:
+            raise ValueError(
+                f"Binding for role {role!r} references unknown provider {binding.provider!r}."
+            )
+        if binding.sandbox not in {READ_ONLY, WORKSPACE_WRITE}:
+            raise ValueError(
+                f"Binding for role {role!r} has unsupported sandbox {binding.sandbox!r}."
+            )
+
 def write_example_config(path: str | Path) -> Path:
     """Write a provider-neutral starter configuration."""
     target = Path(path)
@@ -97,4 +122,4 @@ def write_example_config(path: str | Path) -> Path:
     return target
 
 
-__all__ = ["DevRoomConfig", "load_config", "write_example_config"]
+__all__ = ["DevRoomConfig", "load_config", "validate_config", "write_example_config"]
