@@ -13,6 +13,20 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             LocalOllamaWorkspaceAgent._parse_payload("not json")
 
+    def test_wrapped_json_payload_is_extracted(self):
+        output = 'Model preface: \\n{"summary":"ok","files":[{"path":"smoke_test.txt","content":"ok"}]}'
+        payload = LocalOllamaWorkspaceAgent._parse_payload(output)
+        self.assertEqual(payload["files"][0]["path"], "smoke_test.txt")
+
+    def test_malformed_wrapped_json_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            LocalOllamaWorkspaceAgent._parse_payload(
+                'Model preface: {"summary":"ok","files":[{"path":"smoke_test.txt"}]'
+            )
+
+    def test_empty_output_is_rejected(self):
+        with self.assertRaises(RuntimeError):
+            LocalOllamaWorkspaceAgent._parse_payload("")
     def test_payload_parser_requires_object(self):
         with self.assertRaises(RuntimeError):
             LocalOllamaWorkspaceAgent._parse_payload("[]")
