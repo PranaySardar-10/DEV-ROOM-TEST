@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, Mapping, Protocol
+import time
 
 from .state_store import WorkflowStateWriter
 from typing import TYPE_CHECKING
@@ -65,6 +66,27 @@ class MockProvider:
             artifacts=(f"mock-{task.role.lower()}-artifact",),
         )
 
+class ResourceGuard:
+    """Protect long-running local inference with a configurable cooldown between agent calls."""
+    def __init__(self, *, cooldown_after_seconds: float = 3600.0, cooldown_seconds: float = 45.0, clock: Callable[[], float] = time.monotonic, sleeper: Callable[[float], None] = time.sleep) -> None:
+        if cooldown_after_seconds < 0: raise ValueError("cooldown_after_seconds must be >= 0")
+        if cooldown_seconds < 0: raise ValueError("cooldown_seconds must be >= 0")
+        self.cooldown_after_seconds = cooldown_after_seconds
+        self.cooldown_seconds = cooldown_seconds
+        self.clock = clock
+        self.sleeper = sleeper
+        self._work_started_at: float | None = None
+
+    def before_agent(self) -> None:
+        if self._work_started_at is None: self._work_started_at = self.clock()
+
+    def after_agent(self) -> bool:
+        if self._work_started_at is None: return False
+        elapsed = self.clock() - self._work_started_at
+        if elapsed < self.cooldown_after_seconds: return False
+        if self.cooldown_seconds > 0: self.sleeper(self.cooldown_seconds)
+        self._work_started_at = self.clock()
+        return True
 
 @dataclass
 class WorkflowResult:
@@ -174,9 +196,11 @@ class DevRoomOrchestrator:
                 task_context["workspace"] = str(workspace)
             if allowed_paths:
                 task_context["allowed_paths"] = ",".join(str(path) for path in allowed_paths)
+            self.resource_guard.before_agent()
             result = self.provider.execute(
                 AgentTask(role=role, goal=task_goal, context=task_context)
             )
+            self.resource_guard.after_agent()
             results.append(result)
             persist(stage)
             return result
@@ -314,6 +338,7 @@ __all__ = [
     "HumanDecision",
     "HumanGate",
     "MockProvider",
+    "ResourceGuard",
     "Stage",
     "WorkflowResult",
 ]
