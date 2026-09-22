@@ -16,6 +16,8 @@ class DevRoomConfig:
 
     providers: tuple[ProviderSpec, ...]
     bindings: Mapping[str, RoleBinding]
+    cooldown_after_seconds: float = 3600.0
+    cooldown_seconds: float = 45.0
 
 
 def load_config(path: str | Path) -> DevRoomConfig:
@@ -50,6 +52,12 @@ def load_config(path: str | Path) -> DevRoomConfig:
             )
         )
 
+    cooldown = raw.get("resource_guard", {})
+    if not isinstance(cooldown, dict): raise ValueError("'resource_guard' must be an object.")
+    cooldown_after_seconds = float(cooldown.get("cooldown_after_seconds", 3600.0))
+    cooldown_seconds = float(cooldown.get("cooldown_seconds", 45.0))
+    if cooldown_after_seconds < 0 or cooldown_seconds < 0: raise ValueError("Resource cooldown values must be >= 0.")
+
     bindings_raw = raw.get("bindings")
     if bindings_raw is None:
         bindings = dict(DEFAULT_ROLE_BINDINGS)
@@ -66,7 +74,7 @@ def load_config(path: str | Path) -> DevRoomConfig:
                 sandbox=str(item.get("sandbox", READ_ONLY)),
             )
 
-    return DevRoomConfig(tuple(providers), bindings)
+    return DevRoomConfig(tuple(providers), bindings, cooldown_after_seconds, cooldown_seconds)
 
 
 def validate_config(config: DevRoomConfig) -> None:
@@ -141,6 +149,10 @@ def write_example_config(path: str | Path) -> Path:
                 },
             },
         ],
+        "resource_guard": {
+            "cooldown_after_seconds": 3600,
+            "cooldown_seconds": 45,
+        },
         "bindings": {
             role: {
                 "provider": "gemma4-e4b-local",
