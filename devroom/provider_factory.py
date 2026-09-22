@@ -56,6 +56,10 @@ def build_default_factory() -> ProviderFactory:
     """Return only the production-approved local provider builders."""
     factory = ProviderFactory()
 
+    def build_local_qwen(options: Mapping[str, Any]) -> AgentProvider:
+        from .local_qwen_provider import LocalQwenConfig, LocalQwenProvider
+        return LocalQwenProvider(LocalQwenConfig(**dict(options)))
+
     def build_local_ollama(options: Mapping[str, Any]) -> AgentProvider:
         from .local_ollama_provider import LocalOllamaConfig, LocalOllamaProvider
         return LocalOllamaProvider(LocalOllamaConfig(**dict(options)))
@@ -65,6 +69,7 @@ def build_default_factory() -> ProviderFactory:
         from .workspace_agent import LocalWorkspaceAgentAdapter
         return LocalWorkspaceAgentAdapter(LocalOllamaWorkspaceAgent(**dict(options)))
 
+    factory.register("local-qwen-ollama", build_local_qwen)
     factory.register("local-ollama", build_local_ollama)
     factory.register("local-ollama-workspace", build_local_ollama_workspace)
     return factory
