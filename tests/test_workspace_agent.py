@@ -60,7 +60,7 @@ class WorkspaceAgentAdapterTests(unittest.TestCase):
     def test_adapter_requires_workspace(self) -> None:
         with self.assertRaises(ValueError):
             LocalWorkspaceAgentAdapter(FakeWorkspaceAgent()).execute(
-                AgentTask("Implementer", "Create a file")
+                AgentTask("Implementer", "Create a file", {"sandbox": WORKSPACE_WRITE})
             )
 
 
