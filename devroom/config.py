@@ -123,15 +123,6 @@ def write_example_config(path: str | Path) -> Path:
                 },
             },
             {
-                "name": "qwen3.5-3b-local",
-                "kind": "local-ollama",
-                "options": {
-                    "command": "ollama",
-                    "model": "qwen3.5:3b",
-                    "timeout_seconds": 600,
-                },
-            },
-            {
                 "name": "qwen3.5-4b-local",
                 "kind": "local-ollama",
                 "options": {
@@ -141,11 +132,11 @@ def write_example_config(path: str | Path) -> Path:
                 },
             },
             {
-                "name": "qwen3.5-3b-workspace-local",
+                "name": "qwen3.5-4b-workspace-local",
                 "kind": "local-ollama-workspace",
                 "options": {
                     "command": "ollama",
-                    "model": "qwen3.5:3b",
+                    "model": "qwen3.5:4b",
                     "timeout_seconds": 600,
                 },
             },
@@ -153,7 +144,7 @@ def write_example_config(path: str | Path) -> Path:
         "bindings": {
             role: {
                 "provider": (
-                    "qwen3.5-3b-workspace-local"
+                    "qwen3.5-4b-workspace-local"
                     if role == "Implementer"
                     else binding.provider
                 ),
