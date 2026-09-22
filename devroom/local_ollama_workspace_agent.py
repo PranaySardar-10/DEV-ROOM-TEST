@@ -103,9 +103,11 @@ class LocalOllamaWorkspaceAgent:
 
     @staticmethod
     def _build_prompt(task: AgentTask, allowed: set[str], workspace: LocalWorkspaceProvider) -> str:
+        relevant_keys = {"proposal", "architecture", "feedback", "revision_instruction"}
         context = "\n".join(
-            f"- {key}: {value}" for key, value in sorted(task.context.items())
-            if key not in {"sandbox"}
+            f"- {key}: {task.context[key]}"
+            for key in sorted(relevant_keys)
+            if key in task.context
         )
         source_files: list[str] = []
         for relative_path in sorted(allowed):
@@ -114,21 +116,26 @@ class LocalOllamaWorkspaceAgent:
             except FileNotFoundError:
                 content = "<file does not exist yet>"
             source_files.append(
-                f"### {relative_path}\\n```text\\n{content}\\n```"
+                f"### {relative_path}\n```text\n{content}\n```"
             )
         source = "\n\n".join(source_files)
         scope = ", ".join(sorted(allowed))
         return (
-            "You are the DevRoom production Implementer. Integrate ONLY the approved "
-            "implementation into the assigned workspace. Do not self-approve.\n\n"
-            f"ROLE: {task.role}\nGOAL: {task.goal}\n"
-            f"APPROVED FILE SCOPE: {scope}\nCONTEXT:\n{context or '- none'}\n\n"
+            "You are the DevRoom production Implementer.\n"
+            "Execute ONLY the approved implementation for the stated GOAL.\n"
+            "Ignore unrelated recommendations, examples, prior conversations, and project ideas.\n"
+            "Do not redesign the task. Do not invent additional files. Do not self-approve.\n\n"
+            f"GOAL: {task.goal}\n"
+            f"APPROVED FILE SCOPE: {scope}\n"
+            f"APPROVED IMPLEMENTATION CONTEXT:\n{context or '- none'}\n\n"
             "CURRENT CONTENT OF APPROVED FILES:\n"
             f"{source}\n\n"
-            "Return ONLY valid JSON with this exact shape: "
+            "Your response MUST be one JSON object and nothing else. "
+            "Do not output reasoning, markdown, headings, commentary, or code fences. "
+            "Use exactly this schema: "
             '{"summary":"short evidence-based summary","files":[{"path":"relative/path","content":"complete file content"}]}. '
             "Return complete replacement content for every file you modify. "
-            "Every path must be one of the approved paths. Do not use markdown fences."
+            "Every path must be one of the approved paths."
         )
 
     @staticmethod
