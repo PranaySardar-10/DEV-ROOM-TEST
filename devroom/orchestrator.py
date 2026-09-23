@@ -142,6 +142,7 @@ class DevRoomOrchestrator:
         allowed_paths: tuple[str, ...] = (),
         human_gate: HumanGate | None = None,
         max_feedback_cycles: int = 3,
+        specification: str | None = None,
         resume_state: PersistedWorkflow | None = None,
     ) -> WorkflowResult:
         if not goal.strip():
@@ -152,10 +153,13 @@ class DevRoomOrchestrator:
             raise ValueError("allowed_paths must not contain blank paths")
         if max_feedback_cycles < 0:
             raise ValueError("max_feedback_cycles must be >= 0")
+        specification = (specification or "").strip()
 
         if resume_state is not None:
             if resume_state.goal is not None and resume_state.goal != goal:
                 raise ValueError("resume state goal does not match the requested goal")
+            if resume_state.specification is not None and resume_state.specification != specification:
+                raise ValueError("resume state specification does not match the requested specification")
             if resume_state.workspace != workspace:
                 raise ValueError("resume state workspace does not match the requested workspace")
             if resume_state.allowed_paths != tuple(allowed_paths):
@@ -253,6 +257,7 @@ class DevRoomOrchestrator:
                 workspace=workspace,
                 allowed_paths=allowed_paths,
                 max_feedback_cycles=max_feedback_cycles,
+                specification=specification,
                 in_flight_role=in_flight_role,
             )
 
@@ -280,6 +285,8 @@ class DevRoomOrchestrator:
                 task_context["workspace"] = str(workspace)
             if allowed_paths:
                 task_context["allowed_paths"] = ",".join(str(path) for path in allowed_paths)
+            if specification:
+                task_context["task_specification"] = specification
             self.resource_guard.before_agent()
             persist(stage, in_flight_role=role)
             try:
