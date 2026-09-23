@@ -91,7 +91,7 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
             [task.role for task in provider.calls],
-            ["Lead", "Architect", "Coder", "Coder", "Implementer", "QA"],
+            ["Lead", "Architect", "Coder", "Architect", "Coder", "Implementer", "QA"],
         )
         self.assertEqual(
             provider.calls[3].context["revision_instruction"],
