@@ -21,6 +21,7 @@ class PersistedWorkflow:
     allowed_paths: tuple[str, ...] = ()
     max_feedback_cycles: int = 3
     in_flight_role: str | None = None
+    last_decision_stage: str | None = None
 
 
 class JsonWorkflowStateStore:
@@ -46,6 +47,7 @@ class JsonWorkflowStateStore:
             "allowed_paths": list(state.allowed_paths),
             "max_feedback_cycles": state.max_feedback_cycles,
             "in_flight_role": state.in_flight_role,
+            "last_decision_stage": state.last_decision_stage,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
@@ -106,7 +108,7 @@ class JsonWorkflowStateStore:
         if isinstance(max_feedback_cycles, bool) or not isinstance(max_feedback_cycles, int) or max_feedback_cycles < 0:
             raise ValueError("Workflow state has invalid max_feedback_cycles.")
 
-        for field in ("halted_reason", "last_decision", "last_feedback", "goal", "workspace", "in_flight_role"):
+        for field in ("halted_reason", "last_decision", "last_feedback", "goal", "workspace", "in_flight_role", "last_decision_stage"):
             value = payload.get(field)
             if value is not None and not isinstance(value, str):
                 raise ValueError(f"Workflow state field {field!r} must be a string or null.")
@@ -124,6 +126,7 @@ class JsonWorkflowStateStore:
             allowed_paths=tuple(allowed_paths),
             max_feedback_cycles=max_feedback_cycles,
             in_flight_role=payload.get("in_flight_role"),
+            last_decision_stage=payload.get("last_decision_stage"),
         )
 
 
@@ -149,6 +152,7 @@ class WorkflowStateWriter:
         allowed_paths: Iterable[str] = (),
         max_feedback_cycles: int = 3,
         in_flight_role: str | None = None,
+        last_decision_stage: str | None = None,
     ) -> None:
         self.store.save(
             PersistedWorkflow(
@@ -164,6 +168,7 @@ class WorkflowStateWriter:
                 allowed_paths=tuple(allowed_paths),
                 max_feedback_cycles=max_feedback_cycles,
                 in_flight_role=in_flight_role,
+                last_decision_stage=last_decision_stage,
             )
         )
 
