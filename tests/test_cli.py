@@ -19,7 +19,6 @@ class CliStartupTests(unittest.TestCase):
             check=True,
             state_dir=".devroom/state",
             workflow_id=None,
-            spec_file=None,
         )
         config = SimpleNamespace(providers=(ProviderSpec("codex", "codex-cli"),))
 
