@@ -61,6 +61,9 @@ class ProviderRouter:
         context["provider"] = binding.provider
         context["sandbox"] = binding.sandbox
 
+        return provider.execute(
+            AgentTask(role=task.role, goal=task.goal, context=context)
+        )
 
 
 _DEFAULT_NO_EXTRA = (
