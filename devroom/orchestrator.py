@@ -300,8 +300,9 @@ class DevRoomOrchestrator:
                 task_context["workspace"] = str(workspace)
             if allowed_paths:
                 task_context["allowed_paths"] = ",".join(str(path) for path in allowed_paths)
-            if specification:
-                task_context["task_specification"] = specification
+            role_specification = task_specification_for_role(role)
+            if role_specification:
+                task_context["task_specification"] = role_specification
             self.resource_guard.before_agent()
             persist(stage, in_flight_role=role)
             try:
@@ -321,6 +322,27 @@ class DevRoomOrchestrator:
             results.append(result)
             persist(stage, in_flight_role=None)
             return result
+
+        def task_specification_for_role(role: str) -> str:
+            """Expose only workflow-relevant specification sections to each role."""
+            if not specification:
+                return ""
+            if role == "QA":
+                return specification
+
+            excluded = {"qa", "human unity validation", "completion"}
+            lines = specification.splitlines()
+            kept: list[str] = []
+            skip = False
+            for line in lines:
+                if line.startswith("#"):
+                    heading = line.lstrip("#").strip().lower()
+                    level = len(line) - len(line.lstrip("#"))
+                    if level <= 2:
+                        skip = heading in excluded
+                if not skip:
+                    kept.append(line)
+            return "\n".join(kept).strip()
 
         def collect_qa_evidence() -> dict[str, str]:
             if workspace is None:
