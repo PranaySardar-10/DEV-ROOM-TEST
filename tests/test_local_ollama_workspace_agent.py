@@ -135,9 +135,8 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
                     "allowed_paths": "a.txt,b.txt",
                 },
             )
-            agent = LocalOllamaWorkspaceAgent(model="gemma4:e4b")
-            with unittest.mock.patch.object(
-                agent,
+            with patch.object(
+                LocalOllamaWorkspaceAgent,
                 "_generate_structured",
                 return_value={
                     "summary": "two files",
@@ -147,6 +146,7 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
                     ],
                 },
             ):
+                agent = LocalOllamaWorkspaceAgent(model="gemma4:e4b")
                 with self.assertRaisesRegex(OSError, "disk write failed"):
                     agent.execute_in_workspace(task, workspace)
 
