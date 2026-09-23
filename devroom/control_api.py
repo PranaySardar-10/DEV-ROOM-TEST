@@ -237,9 +237,21 @@ class _Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > 1024 * 1024:
+                self._send(413, {"error": "request body too large"})
+                return
             body = json.loads(self.rfile.read(length) or b"{}")
+            if not isinstance(body, dict):
+                self._send(400, {"error": "request body must be a JSON object"})
+                return
+            workflow_id = str(body.get("workflow_id", "")).strip()
+            if workflow_id != self.controller.snapshot()["workflow_id"]:
+                self._send(409, {"error": "workflow_id does not match the active workflow"})
+                return
             self.controller.decide(body.get("decision", ""), str(body.get("feedback", "")))
             self._send(202, {"accepted": True, "workflow": self.controller.snapshot()})
+        except json.JSONDecodeError:
+            self._send(400, {"error": "request body must contain valid JSON"})
         except (ValueError, RuntimeError) as exc:
             self._send(409, {"error": str(exc)})
 
@@ -263,9 +275,10 @@ def serve_control_api(
         raise ValueError("control_token is required when binding the control API to a non-loopback host")
     if control_token is not None and not control_token.strip():
         raise ValueError("control_token must not be blank")
-    _Handler.controller = controller
-    _Handler.control_token = control_token
-    server = ThreadingHTTPServer((host, port), _Handler)
+    handler = type("DevRoomControlHandler", (_Handler,), {})
+    handler.controller = controller
+    handler.control_token = control_token
+    server = ThreadingHTTPServer((host, port), handler)
     controller.start()
     thread = threading.Thread(target=server.serve_forever, name="devroom-control-api", daemon=True)
     thread.start()
