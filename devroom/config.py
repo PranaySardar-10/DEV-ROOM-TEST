@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
@@ -54,9 +55,15 @@ def load_config(path: str | Path) -> DevRoomConfig:
 
     cooldown = raw.get("resource_guard", {})
     if not isinstance(cooldown, dict): raise ValueError("'resource_guard' must be an object.")
-    cooldown_after_seconds = float(cooldown.get("cooldown_after_seconds", 3600.0))
-    cooldown_seconds = float(cooldown.get("cooldown_seconds", 45.0))
-    if cooldown_after_seconds < 0 or cooldown_seconds < 0: raise ValueError("Resource cooldown values must be >= 0.")
+    try:
+        cooldown_after_seconds = float(cooldown.get("cooldown_after_seconds", 3600.0))
+        cooldown_seconds = float(cooldown.get("cooldown_seconds", 45.0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Resource cooldown values must be numeric.") from exc
+    if not math.isfinite(cooldown_after_seconds) or not math.isfinite(cooldown_seconds):
+        raise ValueError("Resource cooldown values must be finite.")
+    if cooldown_after_seconds < 0 or cooldown_seconds < 0:
+        raise ValueError("Resource cooldown values must be >= 0.")
 
     bindings_raw = raw.get("bindings")
     if bindings_raw is None:
