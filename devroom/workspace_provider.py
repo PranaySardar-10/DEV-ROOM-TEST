@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from .errors import AgentPreflightError
+
 
 @dataclass(frozen=True)
 class CommandResult:
@@ -12,10 +14,6 @@ class CommandResult:
     returncode: int
     stdout: str
     stderr: str
-
-
-class WorkspacePreflightError(RuntimeError):
-    """Raised when workspace validation fails before any implementation write."""
 
 
 class LocalWorkspaceProvider:
@@ -125,7 +123,7 @@ class LocalWorkspaceProvider:
             approved_executables=("git",),
         )
         if branch.returncode != 0 or not branch.stdout.strip():
-            raise WorkspacePreflightError("Implementer workspace must be on a named Git branch.")
+            raise AgentPreflightError("Implementer workspace must be on a named Git branch.")
 
         name = branch.stdout.strip()
         if name in {"main", "master"}:
@@ -168,4 +166,4 @@ class LocalWorkspaceProvider:
         return resolved
 
 
-__all__ = ["CommandResult", "LocalWorkspaceProvider", "WorkspacePreflightError"]
+__all__ = ["CommandResult", "LocalWorkspaceProvider"]
