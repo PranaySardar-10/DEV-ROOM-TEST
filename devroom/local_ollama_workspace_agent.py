@@ -84,12 +84,35 @@ class LocalOllamaWorkspaceAgent:
             validated.append((relative_path, content))
 
         # Validate the complete response before writing anything.
+        original_contents: dict[str, str | None] = {}
         for relative_path, _content in validated:
-            workspace._safe_path(relative_path)
+            target = workspace._safe_path(relative_path)
+            if target.exists() and not target.is_file():
+                raise RuntimeError(f"Approved path is not a regular file: {relative_path!r}")
+            original_contents[relative_path] = (
+                target.read_text(encoding="utf-8") if target.exists() else None
+            )
+
         written: list[str] = []
-        for relative_path, content in validated:
-            workspace.write_file(relative_path, content)
-            written.append(relative_path)
+        try:
+            for relative_path, content in validated:
+                workspace.write_file(relative_path, content)
+                written.append(relative_path)
+        except Exception as exc:
+            try:
+                for relative_path, original in original_contents.items():
+                    target = workspace._safe_path(relative_path)
+                    if original is None:
+                        if target.exists():
+                            target.unlink()
+                    else:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(original, encoding="utf-8")
+            except Exception as rollback_exc:
+                raise RuntimeError(
+                    "Implementer write failed and workspace rollback also failed."
+                ) from rollback_exc
+            raise
 
         summary = str(payload.get("summary", "")).strip() or (
             f"Implemented {len(written)} approved file(s)."
