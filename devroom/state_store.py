@@ -16,12 +16,16 @@ class PersistedWorkflow:
     halted_reason: str | None = None
     last_decision: str | None = None
     last_feedback: str | None = None
+    goal: str | None = None
+    workspace: str | None = None
+    allowed_paths: tuple[str, ...] = ()
+    max_feedback_cycles: int = 3
 
 
 class JsonWorkflowStateStore:
     """Small durable state store for resumable DevRoom workflow records."""
 
-    schema_version = 1
+    schema_version = 2
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -36,6 +40,10 @@ class JsonWorkflowStateStore:
             "halted_reason": state.halted_reason,
             "last_decision": state.last_decision,
             "last_feedback": state.last_feedback,
+            "goal": state.goal,
+            "workspace": state.workspace,
+            "allowed_paths": list(state.allowed_paths),
+            "max_feedback_cycles": state.max_feedback_cycles,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
@@ -56,6 +64,10 @@ class JsonWorkflowStateStore:
             halted_reason=payload.get("halted_reason"),
             last_decision=payload.get("last_decision"),
             last_feedback=payload.get("last_feedback"),
+            goal=payload.get("goal"),
+            workspace=payload.get("workspace"),
+            allowed_paths=tuple(str(item) for item in payload.get("allowed_paths", [])),
+            max_feedback_cycles=int(payload.get("max_feedback_cycles", 3)),
         )
 
 
