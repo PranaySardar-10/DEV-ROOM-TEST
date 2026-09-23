@@ -1,6 +1,8 @@
 import json
 import tempfile
+import os
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from devroom.state_store import JsonWorkflowStateStore, PersistedWorkflow
@@ -28,6 +30,37 @@ class WorkflowStateStoreTests(unittest.TestCase):
             self.assertTrue(path.exists())
             self.assertFalse(path.with_suffix(".json.tmp").exists())
             self.assertEqual(store.load("abc"), state)
+
+    def test_failed_replace_preserves_previous_state_and_cleans_temp(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            store = JsonWorkflowStateStore(path)
+            original = PersistedWorkflow("abc", "lead", ("lead",), ())
+            store.save(original)
+
+            replacement = PersistedWorkflow("abc", "architect", ("lead", "architect"), ())
+            with patch("devroom.state_store.os.replace", side_effect=OSError("simulated crash")):
+                with self.assertRaises(OSError):
+                    store.save(replacement)
+
+            self.assertEqual(store.load("abc"), original)
+            self.assertFalse(path.with_suffix(".json.tmp").exists())
+
+    def test_save_fsyncs_snapshot_before_replace(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            store = JsonWorkflowStateStore(path)
+            fsync_calls = []
+            real_fsync = os.fsync
+
+            def record_fsync(fd):
+                fsync_calls.append(fd)
+                return real_fsync(fd)
+
+            with patch("devroom.state_store.os.fsync", side_effect=record_fsync):
+                store.save(PersistedWorkflow("abc", "lead", ("lead",), ()))
+
+            self.assertGreaterEqual(len(fsync_calls), 1)
 
     def test_rejects_wrong_workflow_id_and_schema(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
