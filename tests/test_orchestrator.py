@@ -168,6 +168,30 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         self.assertIn(Stage.HUMAN_REVIEW, result.history)
         self.assertNotIn(Stage.IMPLEMENTER, result.history)
 
+    def test_qa_receives_actual_workspace_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            (workspace / "smoke_test.txt").write_text(
+                "DEVROOM_SMOKE_TEST_OK", encoding="utf-8"
+            )
+            provider = MockProvider()
+            result = DevRoomOrchestrator(provider).run(
+                "Validate smoke output",
+                workspace=str(workspace),
+                allowed_paths=("smoke_test.txt",),
+                human_gate=lambda stage, prompt, context: (
+                    HumanDecision.APPROVE,
+                    "",
+                ),
+            )
+            self.assertEqual(result.stage, Stage.COMPLETE)
+            qa_tasks = [task for task in provider.calls if task.role == "QA"]
+            self.assertEqual(len(qa_tasks), 1)
+            evidence = qa_tasks[0].context["workspace_evidence"]
+            self.assertIn("smoke_test.txt", evidence)
+            self.assertIn("DEVROOM_SMOKE_TEST_OK", evidence)
+            self.assertIn("ACTUAL GIT STATUS:", evidence)
+
     def test_persists_final_workflow_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.json"
