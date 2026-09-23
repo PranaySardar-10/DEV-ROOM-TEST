@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 import time
@@ -27,21 +28,22 @@ def run_with_stall_timeout(
         tuple(command),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        text=False,
     )
-    stdout_chunks: list[str] = []
-    stderr_chunks: list[str] = []
+    stdout_chunks: list[bytes] = []
+    stderr_chunks: list[bytes] = []
     lock = threading.Lock()
     last_activity = time.monotonic()
 
-    def drain(stream, target: list[str]) -> None:
+    def drain(stream, target: list[bytes]) -> None:
         nonlocal last_activity
         if stream is None:
             return
         try:
-            for chunk in iter(stream.readline, ""):
+            while True:
+                chunk = os.read(stream.fileno(), 4096)
+                if not chunk:
+                    break
                 target.append(chunk)
                 with lock:
                     last_activity = time.monotonic()
@@ -76,8 +78,8 @@ def run_with_stall_timeout(
         stderr_thread.join(timeout=2)
 
     result = ProcessRunResult(
-        stdout="".join(stdout_chunks),
-        stderr="".join(stderr_chunks),
+        stdout=b"".join(stdout_chunks).decode("utf-8", errors="replace"),
+        stderr=b"".join(stderr_chunks).decode("utf-8", errors="replace"),
         returncode=int(returncode),
     )
     if stalled:
