@@ -15,7 +15,7 @@ class LocalModelBenchmarkTests(unittest.TestCase):
     def test_default_suite_covers_unity_csharp_work(self) -> None:
         self.assertEqual(
             DEFAULT_MODEL_SUITE,
-            ("qwen3.5:4b", "qwen3.5:3b", "qwen3.5:1.5b", "gemma4:e4b"),
+            ("gemma4:e4b",),
         )
         self.assertEqual(
             [item["id"] for item in UNITY_CSHARP_BENCHMARKS],
