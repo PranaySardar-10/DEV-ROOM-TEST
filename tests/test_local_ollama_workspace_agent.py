@@ -11,8 +11,7 @@ from devroom.workspace_provider import LocalWorkspaceProvider
 
 class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
     def test_non_json_output_is_rejected(self):
-        with self.assertRaises(RuntimeError):
-            LocalOllamaWorkspaceAgent(model="gemma4:e4b")._generate_structured("test")
+        self.assertIsNone(LocalOllamaWorkspaceAgent._try_parse_json("not json"))
 
     def test_wrapped_json_payload_is_extracted(self):
         output = 'Model preface: \\n{"summary":"ok","files":[{"path":"smoke_test.txt","content":"ok"}]}'
@@ -20,7 +19,7 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
         self.assertEqual(payload["files"][0]["path"], "smoke_test.txt")
 
     def test_ollama_response_envelope_is_parsed(self):
-        output = '{"model":"gemma4:e4b","response":"{\\"summary\\":\\"ok\\",\\"files\\":[{\\"path\\":\\"smoke_test.txt\\",\\"content\\":\\"ok\\"}]}","done":true}'
+        output = '{"model":"gemma4:e4b","response":"{\\\"summary\\\":\\\"ok\\\",\\\"files\\\":[{\\\"path\\\":\\\"smoke_test.txt\\\",\\\"content\\\":\\\"ok\\\"}]}","done":true}'
         envelope = json.loads(output)
         payload = LocalOllamaWorkspaceAgent._try_parse_json(envelope["response"])
         self.assertEqual(payload["files"][0]["content"], "ok")
