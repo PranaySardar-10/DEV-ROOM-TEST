@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from devroom.orchestrator import (
+    AgentPreflightError,
     AgentResult,
     DevRoomOrchestrator,
     HumanDecision,
@@ -227,6 +228,70 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             self.assertEqual(
                 [stage.value for stage in result.history],
                 ["lead", "architect", "coder", "human_review", "implementer", "qa", "unity_validation", "complete"],
+            )
+
+    def test_resume_after_agent_preflight_failure(self) -> None:
+        class PreflightFailingProvider(MockProvider):
+            def execute(self, task):
+                self.calls.append(task)
+                if task.role == "Implementer":
+                    raise AgentPreflightError("workspace branch is not ready")
+                return super().execute(task)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "preflight-resume")
+
+            with self.assertRaisesRegex(AgentPreflightError, "workspace branch is not ready"):
+                DevRoomOrchestrator(
+                    PreflightFailingProvider(),
+                    state_writer=writer,
+                ).run(
+                    "Recover from a preflight failure",
+                    workspace=r"D:\\DEV_ROOM_TEST",
+                    allowed_paths=("Assets/Test.cs",),
+                    human_gate=self.approve_all,
+                )
+
+            persisted = JsonWorkflowStateStore(path).load("preflight-resume")
+            self.assertEqual(persisted.stage, Stage.IMPLEMENTER.value)
+            self.assertEqual(
+                persisted.history,
+                ("lead", "architect", "coder", "human_review", "implementer"),
+            )
+            self.assertEqual(
+                [item["role"] for item in persisted.results],
+                ["Lead", "Architect", "Coder"],
+            )
+            self.assertIsNone(persisted.in_flight_role)
+            self.assertEqual(persisted.last_decision, HumanDecision.APPROVE.value)
+            self.assertEqual(
+                persisted.last_decision_stage,
+                Stage.HUMAN_REVIEW.value,
+            )
+            self.assertIn("preflight failed", persisted.halted_reason or "")
+
+            resumed_provider = MockProvider()
+            def resume_gate(stage, prompt, context):
+                if stage is Stage.HUMAN_REVIEW:
+                    raise AssertionError("human review must not be replayed")
+                return HumanDecision.APPROVE, ""
+
+            result = DevRoomOrchestrator(
+                resumed_provider,
+                state_writer=writer,
+            ).run(
+                "Recover from a preflight failure",
+                workspace=r"D:\\DEV_ROOM_TEST",
+                allowed_paths=("Assets/Test.cs",),
+                human_gate=resume_gate,
+                resume_state=persisted,
+            )
+
+            self.assertEqual(result.stage, Stage.COMPLETE)
+            self.assertEqual(
+                [task.role for task in resumed_provider.calls],
+                ["Implementer", "QA"],
             )
 
     def test_resume_rejects_interrupted_agent_execution(self) -> None:
