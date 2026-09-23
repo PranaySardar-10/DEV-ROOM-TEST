@@ -86,6 +86,27 @@ class LocalWorkspaceProvider:
             stderr=completed.stderr,
         )
 
+    def require_implementation_branch(self) -> str:
+        """Require a Git worktree on a named, non-protected branch."""
+        branch_result = self.run_command(
+            ("git", "branch", "--show-current"),
+            approved_executables=("git",),
+        )
+        if branch_result.returncode != 0:
+            raise RuntimeError(
+                branch_result.stderr.strip() or "Unable to determine Git branch."
+            )
+        branch = branch_result.stdout.strip()
+        if not branch:
+            raise PermissionError(
+                "Implementer requires a named Git branch; detached HEAD is not allowed."
+            )
+        if branch in {"main", "master"}:
+            raise PermissionError(
+                f"Implementer cannot write to protected branch {branch!r}."
+            )
+        return branch
+
     def git_diff(self) -> str:
         result = self.run_command(
             ("git", "diff", "--no-ext-diff", "--"),
