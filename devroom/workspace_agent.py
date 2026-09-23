@@ -39,6 +39,7 @@ class LocalWorkspaceAgentAdapter:
         if not workspace_path:
             raise ValueError("Workspace-aware execution requires a workspace context.")
         workspace = LocalWorkspaceProvider(workspace_path)
+        workspace.require_implementation_branch()
         return self.agent.execute_in_workspace(task, workspace)
 
 
