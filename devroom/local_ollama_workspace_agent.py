@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-import subprocess
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
@@ -10,13 +11,36 @@ from .sandbox_policy import WORKSPACE_WRITE
 from .workspace_provider import LocalWorkspaceProvider
 
 
+ARTIFACT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "files": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+                "required": ["path", "content"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["summary", "files"],
+    "additionalProperties": False,
+}
+
+
 @dataclass(frozen=True)
 class LocalOllamaWorkspaceAgent:
-    """Controlled local Ollama Implementer using a strict file-change protocol."""
+    """Controlled local Ollama Implementer using structured API output."""
 
     command: str = "ollama"
     model: str = ""
     timeout_seconds: int = 600
+    api_url: str = "http://localhost:11434/api/generate"
 
     def execute_in_workspace(
         self,
@@ -36,31 +60,7 @@ class LocalOllamaWorkspaceAgent:
             raise ValueError("Implementer requires an explicit allowed_paths scope.")
 
         prompt = self._build_prompt(task, allowed, workspace)
-        try:
-            completed = subprocess.run(
-                (self.command, "run", self.model, "--format", "json", prompt),
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=self.timeout_seconds,
-                check=False,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError(f"Ollama command was not found: {self.command!r}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise TimeoutError(
-                f"Local Ollama model {self.model!r} timed out after {self.timeout_seconds}s."
-            ) from exc
-
-        if completed.returncode != 0:
-            detail = completed.stderr.strip() or completed.stdout.strip()
-            raise RuntimeError(
-                f"Local Ollama model {self.model!r} failed with exit code "
-                f"{completed.returncode}: {detail or 'no diagnostic output'}"
-            )
-
-        payload = self._parse_payload(completed.stdout)
+        payload = self._generate_structured(prompt)
         files = payload.get("files")
         if not isinstance(files, list) or not files:
             raise RuntimeError("Implementer response contained no file changes.")
@@ -83,9 +83,8 @@ class LocalOllamaWorkspaceAgent:
             seen.add(relative_path)
             validated.append((relative_path, content))
 
-        # Validate the complete response before writing anything. This prevents
-        # a malformed second file entry from leaving the workspace partially changed.
-        for relative_path, content in validated:
+        # Validate the complete response before writing anything.
+        for relative_path, _content in validated:
             workspace._safe_path(relative_path)
         written: list[str] = []
         for relative_path, content in validated:
@@ -99,6 +98,65 @@ class LocalOllamaWorkspaceAgent:
             role=task.role,
             summary=summary,
             artifacts=tuple(written),
+        )
+
+    def _generate_structured(self, prompt: str) -> dict[str, Any]:
+        request_body = json.dumps(
+            {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": False,
+                "format": ARTIFACT_SCHEMA,
+                "options": {"temperature": 0},
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            self.api_url,
+            data=request_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                raw = response.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace").strip()
+            raise RuntimeError(
+                f"Ollama API returned HTTP {exc.code}: {detail or 'no diagnostic output'}"
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                f"Could not reach Ollama API at {self.api_url!r}: {exc.reason}"
+            ) from exc
+        except TimeoutError as exc:
+            raise TimeoutError(
+                f"Local Ollama model {self.model!r} timed out after {self.timeout_seconds}s."
+            ) from exc
+
+        try:
+            envelope = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Ollama API returned invalid JSON.") from exc
+        if not isinstance(envelope, dict):
+            raise RuntimeError("Ollama API returned an invalid response envelope.")
+
+        response_text = envelope.get("response")
+        if isinstance(response_text, str):
+            payload = self._try_parse_json(response_text)
+            if isinstance(payload, dict):
+                return payload
+
+        message = envelope.get("message")
+        if isinstance(message, dict):
+            content = message.get("content")
+            if isinstance(content, str):
+                payload = self._try_parse_json(content)
+                if isinstance(payload, dict):
+                    return payload
+
+        raise RuntimeError(
+            "Ollama API returned no valid JSON artifact payload; "
+            "no workspace files were changed."
         )
 
     @staticmethod
@@ -116,7 +174,7 @@ class LocalOllamaWorkspaceAgent:
             except FileNotFoundError:
                 content = "<file does not exist yet>"
             source_files.append(
-                f"### {relative_path}\n```text\n{content}\n```"
+                f"FILE {relative_path}\nBEGIN CURRENT CONTENT\n{content}\nEND CURRENT CONTENT"
             )
         source = "\n\n".join(source_files)
         scope = ", ".join(sorted(allowed))
@@ -130,52 +188,9 @@ class LocalOllamaWorkspaceAgent:
             f"APPROVED IMPLEMENTATION CONTEXT:\n{context or '- none'}\n\n"
             "CURRENT CONTENT OF APPROVED FILES:\n"
             f"{source}\n\n"
-            "Your response MUST be one JSON object and nothing else. "
-            "Do not output reasoning, markdown, headings, commentary, or code fences. "
-            "Use exactly this schema: "
-            '{"summary":"short evidence-based summary","files":[{"path":"relative/path","content":"complete file content"}]}. '
-            "Return complete replacement content for every file you modify. "
-            "Every path must be one of the approved paths."
-        )
-
-    @staticmethod
-    def _parse_payload(output: str) -> dict[str, Any]:
-        text = output.strip()
-        if not text:
-            raise RuntimeError(
-                "Implementer returned empty output; no workspace files were changed."
-            )
-
-        # Ollama CLI JSON mode may return a response envelope whose assistant
-        # content is itself the JSON artifact payload. Accept both the direct
-        # payload and the envelope without weakening the artifact validation.
-        candidates = [text]
-        for line in text.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                envelope = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(envelope, dict):
-                response = envelope.get("response")
-                if isinstance(response, str):
-                    candidates.append(response)
-                message = envelope.get("message")
-                if isinstance(message, dict):
-                    content = message.get("content")
-                    if isinstance(content, str):
-                        candidates.append(content)
-
-        for candidate_text in candidates:
-            payload = LocalOllamaWorkspaceAgent._try_parse_json(candidate_text)
-            if isinstance(payload, dict) and isinstance(payload.get("files"), list):
-                return payload
-
-        raise RuntimeError(
-            "Implementer returned no valid JSON artifact payload; "
-            "no workspace files were changed."
+            "Return only the approved implementation artifact. The response is enforced "
+            "against a JSON schema. Return complete replacement content for every file "
+            "you modify. Every path must be one of the approved paths."
         )
 
     @staticmethod
@@ -190,8 +205,6 @@ class LocalOllamaWorkspaceAgent:
 
     @staticmethod
     def _escape_raw_control_chars(text: str) -> str:
-        # Recover JSON objects containing literal newlines/tabs inside string
-        # values, which some local models emit despite JSON mode.
         out: list[str] = []
         in_string = False
         escaped = False
@@ -236,4 +249,5 @@ class LocalOllamaWorkspaceAgent:
                 return candidate
         return None
 
-__all__ = ["LocalOllamaWorkspaceAgent"]
+
+__all__ = ["ARTIFACT_SCHEMA", "LocalOllamaWorkspaceAgent"]
