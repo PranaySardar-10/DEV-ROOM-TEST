@@ -213,6 +213,30 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                 ["lead", "architect", "coder", "human_review", "implementer", "qa", "unity_validation", "complete"],
             )
 
+    def test_resume_rejects_interrupted_agent_execution(self) -> None:
+        from devroom.state_store import PersistedWorkflow
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            store = JsonWorkflowStateStore(path)
+            store.save(PersistedWorkflow(
+                workflow_id="interrupted",
+                stage=Stage.IMPLEMENTER.value,
+                history=("lead", "architect", "coder", "human_review", "implementer"),
+                results=(),
+                goal="Interrupted implementation",
+                in_flight_role="Implementer",
+            ))
+            persisted = store.load("interrupted")
+            with self.assertRaisesRegex(ValueError, "interrupted Implementer execution"):
+                DevRoomOrchestrator(MockProvider()).run(
+                    "Interrupted implementation",
+                    workspace=r"D:\\DEV_ROOM_TEST",
+                    allowed_paths=("Assets/Test.cs",),
+                    human_gate=self.approve_all,
+                    resume_state=persisted,
+                )
+
     def test_agent_failure_persists_halt_and_releases_guard(self) -> None:
         class FailingProvider(MockProvider):
             def execute(self, task):
