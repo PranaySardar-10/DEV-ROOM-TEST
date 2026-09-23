@@ -51,23 +51,60 @@ class JsonWorkflowStateStore:
         os.replace(temporary, self.path)
 
     def load(self, workflow_id: str) -> PersistedWorkflow:
-        payload = json.loads(self.path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Workflow state is unreadable: {self.path}") from exc
+
+        if not isinstance(payload, dict):
+            raise ValueError("Workflow state root must be an object.")
         if payload.get("schema_version") not in {1, self.schema_version}:
             raise ValueError("Unsupported workflow state schema version.")
         if payload.get("workflow_id") != workflow_id:
             raise KeyError(f"Workflow state not found: {workflow_id!r}")
+
+        stage = payload.get("stage")
+        history = payload.get("history")
+        results = payload.get("results")
+        if not isinstance(stage, str) or not stage.strip():
+            raise ValueError("Workflow state has an invalid stage.")
+        if not isinstance(history, list) or not all(isinstance(item, str) for item in history):
+            raise ValueError("Workflow state has invalid history.")
+        if not isinstance(results, list):
+            raise ValueError("Workflow state has invalid results.")
+        for item in results:
+            if not isinstance(item, dict):
+                raise ValueError("Workflow state contains an invalid result entry.")
+            if not isinstance(item.get("role"), str) or not isinstance(item.get("summary"), str):
+                raise ValueError("Workflow state result entries require string role and summary.")
+            artifacts = item.get("artifacts", [])
+            if not isinstance(artifacts, list) or not all(isinstance(path, str) for path in artifacts):
+                raise ValueError("Workflow state result artifacts must be a string list.")
+
+        allowed_paths = payload.get("allowed_paths", [])
+        if not isinstance(allowed_paths, list) or not all(isinstance(path, str) for path in allowed_paths):
+            raise ValueError("Workflow state has invalid allowed_paths.")
+        max_feedback_cycles = payload.get("max_feedback_cycles", 3)
+        if isinstance(max_feedback_cycles, bool) or not isinstance(max_feedback_cycles, int) or max_feedback_cycles < 0:
+            raise ValueError("Workflow state has invalid max_feedback_cycles.")
+
+        for field in ("halted_reason", "last_decision", "last_feedback", "goal", "workspace"):
+            value = payload.get(field)
+            if value is not None and not isinstance(value, str):
+                raise ValueError(f"Workflow state field {field!r} must be a string or null.")
+
         return PersistedWorkflow(
             workflow_id=workflow_id,
-            stage=str(payload["stage"]),
-            history=tuple(str(item) for item in payload["history"]),
-            results=tuple(dict(item) for item in payload["results"]),
+            stage=stage,
+            history=tuple(history),
+            results=tuple(dict(item) for item in results),
             halted_reason=payload.get("halted_reason"),
             last_decision=payload.get("last_decision"),
             last_feedback=payload.get("last_feedback"),
             goal=payload.get("goal"),
             workspace=payload.get("workspace"),
-            allowed_paths=tuple(str(item) for item in payload.get("allowed_paths", [])),
-            max_feedback_cycles=int(payload.get("max_feedback_cycles", 3)),
+            allowed_paths=tuple(allowed_paths),
+            max_feedback_cycles=max_feedback_cycles,
         )
 
 
