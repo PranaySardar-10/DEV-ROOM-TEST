@@ -124,7 +124,7 @@ class ControlApiTests(unittest.TestCase):
 
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
-                data=json.dumps({"workflow_id": "http-test", "decision": "approve"}).encode(),
+                data=json.dumps({"workflow_id": "auth-test", "decision": "approve"}).encode(),
                 headers={"Content-Type": "application/json", "Authorization": "Bearer wrong"},
                 method="POST",
             )
@@ -134,7 +134,7 @@ class ControlApiTests(unittest.TestCase):
 
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
-                data=json.dumps({"workflow_id": "http-test", "decision": "approve"}).encode(),
+                data=json.dumps({"workflow_id": "auth-test", "decision": "approve"}).encode(),
                 headers={"Content-Type": "application/json", "Authorization": "Bearer test-secret"},
                 method="POST",
             )
