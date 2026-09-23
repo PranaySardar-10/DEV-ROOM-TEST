@@ -288,7 +288,8 @@ def serve_control_api(
         thread = threading.Thread(target=server.serve_forever, name="devroom-control-api", daemon=True)
         thread.start()
     except Exception:
-        server.shutdown()
+        # The serve_forever thread did not start successfully, so calling
+        # shutdown() here could block waiting for a loop that never ran.
         server.server_close()
         raise
     return server
