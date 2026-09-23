@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Callable, Mapping, Protocol
 import time
 
+from .errors import AgentPreflightError
 from .state_store import PersistedWorkflow, WorkflowStateWriter
 from typing import TYPE_CHECKING
 
@@ -29,9 +30,6 @@ class HumanDecision(str, Enum):
     REQUEST_CHANGES = "request_changes"
     HALT = "halt"
 
-
-class AgentPreflightError(RuntimeError):
-    """Raised when an agent is blocked before it can modify the workspace."""
 
 
 @dataclass(frozen=True)
