@@ -427,6 +427,15 @@ class DevRoomOrchestrator:
                     persist(Stage.HALTED, reason)
                     return WorkflowResult(Stage.HALTED, history, results, reason)
                 revision_feedback = feedback or "Revise the proposal according to human/ChatGPT review."
+                architecture = call(
+                    Stage.ARCHITECT,
+                    "Architect",
+                    f"Revise the implementation specification for: {goal}",
+                    {
+                        "previous_architecture_summary": architecture.summary,
+                        "revision_instruction": revision_feedback,
+                    },
+                )
                 continue
 
             implementation = call(
