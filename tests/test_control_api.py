@@ -83,7 +83,7 @@ class ControlApiTests(unittest.TestCase):
             self._wait_for_gate(controller, "human_review")
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
-                data=json.dumps({"decision": "approve"}).encode(),
+                data=json.dumps({"workflow_id": "http-test", "decision": "approve"}).encode(),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
@@ -92,7 +92,7 @@ class ControlApiTests(unittest.TestCase):
             self._wait_for_gate(controller, "unity_validation")
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
-                data=json.dumps({"decision": "approve"}).encode(),
+                data=json.dumps({"workflow_id": "http-test", "decision": "approve"}).encode(),
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
@@ -124,7 +124,7 @@ class ControlApiTests(unittest.TestCase):
 
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
-                data=json.dumps({"decision": "approve"}).encode(),
+                data=json.dumps({"workflow_id": "http-test", "decision": "approve"}).encode(),
                 headers={"Content-Type": "application/json", "Authorization": "Bearer wrong"},
                 method="POST",
             )
@@ -134,7 +134,7 @@ class ControlApiTests(unittest.TestCase):
 
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
-                data=json.dumps({"decision": "approve"}).encode(),
+                data=json.dumps({"workflow_id": "http-test", "decision": "approve"}).encode(),
                 headers={"Content-Type": "application/json", "Authorization": "Bearer test-secret"},
                 method="POST",
             )
@@ -144,7 +144,7 @@ class ControlApiTests(unittest.TestCase):
 
             request = Request(
                 f"http://127.0.0.1:{port}/api/workflow/decision",
-                data=json.dumps({"decision": "approve"}).encode(),
+                data=json.dumps({"workflow_id": "auth-test", "decision": "approve"}).encode(),
                 headers={"Content-Type": "application/json", "Authorization": "Bearer test-secret"},
                 method="POST",
             )
@@ -167,6 +167,74 @@ class ControlApiTests(unittest.TestCase):
             request = Request(f"http://127.0.0.1:{port}/api/health", headers={"Origin": "http://127.0.0.1:3000"})
             with urlopen(request, timeout=2) as response:
                 self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "http://127.0.0.1:3000")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_stale_workflow_id_is_rejected(self) -> None:
+        controller = WorkflowController(MockProvider(), workflow_id="current", goal="Current workflow")
+        server = serve_control_api(controller, port=0)
+        try:
+            port = server.server_address[1]
+            self._wait_for_gate(controller, "human_review")
+            request = Request(
+                f"http://127.0.0.1:{port}/api/workflow/decision",
+                data=json.dumps({"workflow_id": "stale", "decision": "approve"}).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with self.assertRaises(HTTPError) as ctx:
+                urlopen(request, timeout=2)
+            self.assertEqual(ctx.exception.code, 409)
+            self.assertEqual(controller.snapshot()["status"], "awaiting_human")
+            controller.decide(HumanDecision.HALT, "test cleanup")
+            self._wait_for_status(controller, "halted")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_multiple_control_servers_keep_isolated_controllers(self) -> None:
+        first = WorkflowController(MockProvider(), workflow_id="first", goal="First")
+        second = WorkflowController(MockProvider(), workflow_id="second", goal="Second")
+        first_server = serve_control_api(first, port=0)
+        second_server = serve_control_api(second, port=0)
+        try:
+            self._wait_for_gate(first, "human_review")
+            self._wait_for_gate(second, "human_review")
+            first_port = first_server.server_address[1]
+            second_port = second_server.server_address[1]
+            with urlopen(f"http://127.0.0.1:{first_port}/api/workflow", timeout=2) as response:
+                self.assertEqual(json.load(response)["workflow_id"], "first")
+            with urlopen(f"http://127.0.0.1:{second_port}/api/workflow", timeout=2) as response:
+                self.assertEqual(json.load(response)["workflow_id"], "second")
+            first.decide(HumanDecision.HALT, "first cleanup")
+            second.decide(HumanDecision.HALT, "second cleanup")
+            self._wait_for_status(first, "halted")
+            self._wait_for_status(second, "halted")
+        finally:
+            first_server.shutdown()
+            first_server.server_close()
+            second_server.shutdown()
+            second_server.server_close()
+
+    def test_invalid_json_is_rejected_without_changing_workflow(self) -> None:
+        controller = WorkflowController(MockProvider(), workflow_id="json-test", goal="JSON validation")
+        server = serve_control_api(controller, port=0)
+        try:
+            port = server.server_address[1]
+            self._wait_for_gate(controller, "human_review")
+            request = Request(
+                f"http://127.0.0.1:{port}/api/workflow/decision",
+                data=b"{not-json",
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with self.assertRaises(HTTPError) as ctx:
+                urlopen(request, timeout=2)
+            self.assertEqual(ctx.exception.code, 400)
+            self.assertEqual(controller.snapshot()["status"], "awaiting_human")
+            controller.decide(HumanDecision.HALT, "test cleanup")
+            self._wait_for_status(controller, "halted")
         finally:
             server.shutdown()
             server.server_close()
