@@ -45,6 +45,14 @@ def load_config(path: str | Path) -> DevRoomConfig:
         options = item.get("options", {})
         if not isinstance(options, dict):
             raise ValueError("Provider 'options' must be an object.")
+        options = dict(options)
+        if "stall_timeout_seconds" not in options and "timeout_seconds" in options:
+            # Backward-compatible migration: the old hard timeout is now a stall limit.
+            # Existing 600s configs are raised to the production default of 30 minutes.
+            try:
+                options["stall_timeout_seconds"] = max(1800, int(options["timeout_seconds"]))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Provider timeout_seconds must be numeric.") from exc
         providers.append(
             ProviderSpec(
                 name=str(item.get("name", "")),
@@ -135,7 +143,7 @@ def write_example_config(path: str | Path) -> Path:
                 "options": {
                     "command": "ollama",
                     "model": "gemma4:e4b",
-                    "timeout_seconds": 600,
+                    "stall_timeout_seconds": 1800,
                 },
             },
             {
@@ -144,7 +152,7 @@ def write_example_config(path: str | Path) -> Path:
                 "options": {
                     "command": "ollama",
                     "model": "gemma4:e4b",
-                    "timeout_seconds": 600,
+                    "stall_timeout_seconds": 1800,
                 },
             },
             {
@@ -153,7 +161,7 @@ def write_example_config(path: str | Path) -> Path:
                 "options": {
                     "command": "ollama",
                     "model": "qwen3.5:4b",
-                    "timeout_seconds": 600,
+                    "stall_timeout_seconds": 1800,
                 },
             },
             {
@@ -162,7 +170,7 @@ def write_example_config(path: str | Path) -> Path:
                 "options": {
                     "command": "ollama",
                     "model": "qwen2.5-coder:3b",
-                    "timeout_seconds": 600,
+                    "stall_timeout_seconds": 1800,
                 },
             },
             {
@@ -171,7 +179,7 @@ def write_example_config(path: str | Path) -> Path:
                 "options": {
                     "command": "ollama",
                     "model": "qwen3.5:4b",
-                    "timeout_seconds": 600,
+                    "stall_timeout_seconds": 1800,
                 },
             },
         ],
