@@ -325,8 +325,17 @@ class DevRoomOrchestrator:
         def collect_qa_evidence() -> dict[str, str]:
             if workspace is None:
                 return {"workspace_evidence": "No workspace was supplied; filesystem verification is unavailable."}
-            provider = LocalWorkspaceProvider(workspace)
-            inspection = provider.inspect()
+            try:
+                provider = LocalWorkspaceProvider(workspace)
+                inspection = provider.inspect()
+            except FileNotFoundError:
+                return {
+                    "workspace_evidence": (
+                        f"WORKSPACE: {workspace}\n"
+                        "UNVERIFIED: workspace path does not exist in the current execution environment; "
+                        "filesystem and Git evidence are unavailable."
+                    )
+                }
             files = "\n".join(str(path) for path in inspection["files"])
             git_status = "\n".join(str(item) for item in inspection["git"])
             allowed = ", ".join(str(path) for path in allowed_paths) or "<none>"
