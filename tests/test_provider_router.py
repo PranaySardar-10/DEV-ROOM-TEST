@@ -100,6 +100,11 @@ class ProviderRouterTests(unittest.TestCase):
         self.assertIn("reviewable implementation proposal", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
         self.assertIn("human-approved proposal", DEFAULT_ROLE_BINDINGS["Implementer"].instructions)
         self.assertIn("untrusted claims", DEFAULT_ROLE_BINDINGS["QA"].instructions)
+        self.assertIn("ROLE CONTRACT PRECEDENCE", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("apply only to that role", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("acceptance criteria and QA/reporting sections describe what must later be verified", DEFAULT_ROLE_BINDINGS["Lead"].instructions)
+        self.assertNotIn("If the task specification defines an exact output format, that format is authoritative.", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("Report the task-required QA fields exactly", DEFAULT_ROLE_BINDINGS["QA"].instructions)
 
     def test_missing_role_binding_fails_loudly(self) -> None:
         with self.assertRaises(KeyError):
