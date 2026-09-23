@@ -148,20 +148,20 @@ def write_example_config(path: str | Path) -> Path:
                 },
             },
             {
-                "name": "qwen2.5-coder-3b-workspace-local",
-                "kind": "local-ollama-workspace",
-                "options": {
-                    "command": "ollama",
-                    "model": "qwen2.5-coder:3b",
-                    "timeout_seconds": 600,
-                },
-            },
-            {
                 "name": "qwen3.5-4b-local",
                 "kind": "local-ollama",
                 "options": {
                     "command": "ollama",
                     "model": "qwen3.5:4b",
+                    "timeout_seconds": 600,
+                },
+            },
+            {
+                "name": "qwen2.5-coder-3b-workspace-local",
+                "kind": "local-ollama-workspace",
+                "options": {
+                    "command": "ollama",
+                    "model": "qwen2.5-coder:3b",
                     "timeout_seconds": 600,
                 },
             },
