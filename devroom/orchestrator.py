@@ -186,7 +186,12 @@ class DevRoomOrchestrator:
                 }
             ]
             actual_roles = [str(item["role"]) for item in resume_state.results]
-            if actual_roles != expected_roles:
+            completed_expected_roles = expected_roles
+            if resume_state.in_flight_role is not None:
+                if not expected_roles or expected_roles[-1] != resume_state.in_flight_role:
+                    raise ValueError("resume state in-flight role does not match its history checkpoint")
+                completed_expected_roles = expected_roles[:-1]
+            if actual_roles != completed_expected_roles:
                 raise ValueError("resume state results do not match the workflow history checkpoint")
             if resume_state.stage in {Stage.COMPLETE.value, Stage.HALTED.value}:
                 raise ValueError("terminal workflow state cannot be resumed")
