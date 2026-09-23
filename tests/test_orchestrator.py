@@ -98,6 +98,33 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             "Split persistence from runtime state.",
         )
 
+    def test_proposal_rejection_revises_architecture_before_coder(self) -> None:
+        provider = MockProvider()
+        decisions = iter([
+            (HumanDecision.REQUEST_CHANGES, "Architect output must be implementation-specific."),
+            (HumanDecision.APPROVE, ""),
+            (HumanDecision.APPROVE, ""),
+        ])
+        result = DevRoomOrchestrator(provider).run(
+            "Implement vehicle ownership",
+            human_gate=lambda stage, prompt, context: next(decisions),
+        )
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            [task.role for task in provider.calls],
+            ["Lead", "Architect", "Coder", "Architect", "Coder", "Implementer", "QA"],
+        )
+        revised_architect = provider.calls[3]
+        self.assertEqual(
+            revised_architect.context["revision_instruction"],
+            "Architect output must be implementation-specific.",
+        )
+        self.assertIn("previous_architecture_summary", revised_architect.context)
+        self.assertEqual(
+            provider.calls[4].context["architecture_summary"],
+            "Mock Architect completed: Revise the implementation specification for: Implement vehicle ownership",
+        )
+
     def test_unity_failure_returns_to_coder(self) -> None:
         provider = MockProvider()
         decisions = iter([
