@@ -22,6 +22,14 @@ class FakeWorkspaceAgent:
 class WorkspaceAgentAdapterTests(unittest.TestCase):
     def test_adapter_supplies_controlled_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            from devroom.workspace_provider import LocalWorkspaceProvider
+            provider = LocalWorkspaceProvider(root)
+            provider.run_command(("git", "init", "-b", "main"), approved_executables=("git",))
+            provider.run_command(
+                ("git", "checkout", "-b", "agent/implementer/test-1"),
+                approved_executables=("git",),
+            )
             agent = FakeWorkspaceAgent()
             adapter = LocalWorkspaceAgentAdapter(agent)
             task = AgentTask(
@@ -66,3 +74,4 @@ class WorkspaceAgentAdapterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
