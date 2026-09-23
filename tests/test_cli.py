@@ -16,6 +16,8 @@ class CliStartupTests(unittest.TestCase):
             workspace=None,
             max_feedback_cycles=3,
             check=True,
+            state_dir=".devroom/state",
+            workflow_id=None,
         )
         config = SimpleNamespace(providers=(ProviderSpec("codex", "codex-cli"),))
 
@@ -41,6 +43,8 @@ class CliStartupTests(unittest.TestCase):
             workspace="workspace",
             max_feedback_cycles=3,
             check=False,
+            state_dir=".devroom/state",
+            workflow_id=None,
         )
 
         with (
