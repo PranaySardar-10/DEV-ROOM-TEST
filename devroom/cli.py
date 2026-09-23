@@ -57,10 +57,12 @@ def _parse_args() -> argparse.Namespace:
         help="Validate configuration and provider availability, then exit.",
     )
     args = parser.parse_args()
-    if not args.check and (not args.goal or not args.workspace):
-        parser.error("--goal and --workspace are required unless --check is used.")
-    if not args.check and not args.allowed_path:
+    if not args.check and not args.resume and (not args.goal or not args.workspace):
+        parser.error("--goal and --workspace are required unless --check or --resume is used.")
+    if not args.check and not args.resume and not args.allowed_path:
         parser.error("At least one --allowed-path is required for a production Implementer run.")
+    if args.resume and not args.workflow_id:
+        parser.error("--workflow-id is required with --resume.")
     return args
 
 
@@ -75,18 +77,33 @@ def main() -> int:
             return 0
         workflow_id = args.workflow_id or uuid4().hex
         state_path = Path(args.state_dir) / f"{workflow_id}.json"
-        state_writer = WorkflowStateWriter(JsonWorkflowStateStore(state_path), workflow_id)
+        state_store = JsonWorkflowStateStore(state_path)
+        resume_state = state_store.load(workflow_id) if args.resume else None
+        if resume_state is not None:
+            if resume_state.goal is None or resume_state.workspace is None:
+                raise ValueError("workflow state does not contain resume inputs")
+            goal = resume_state.goal
+            workspace = resume_state.workspace
+            allowed_paths = resume_state.allowed_paths
+            max_feedback_cycles = resume_state.max_feedback_cycles
+        else:
+            goal = args.goal
+            workspace = args.workspace
+            allowed_paths = tuple(args.allowed_path)
+            max_feedback_cycles = args.max_feedback_cycles
+        state_writer = WorkflowStateWriter(state_store, workflow_id)
         orchestrator = build_from_config(config, state_writer=state_writer)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"DevRoom startup failed: {exc}", file=sys.stderr)
         return 2
 
     result = orchestrator.run(
-        args.goal,
-        workspace=args.workspace,
-        allowed_paths=tuple(args.allowed_path),
+        goal,
+        workspace=workspace,
+        allowed_paths=allowed_paths,
         human_gate=_human_gate,
-        max_feedback_cycles=args.max_feedback_cycles,
+        max_feedback_cycles=max_feedback_cycles,
+        resume_state=resume_state,
     )
     print(f"\nDevRoom finished: {result.stage.value}")
     if result.halted_reason:
