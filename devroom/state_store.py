@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -58,7 +59,15 @@ class JsonWorkflowStateStore:
                 json.dump(payload, handle, indent=2, sort_keys=True)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temporary, self.path)
+            replace_attempts = 3 if os.name == "nt" else 1
+            for attempt in range(replace_attempts):
+                try:
+                    os.replace(temporary, self.path)
+                    break
+                except PermissionError:
+                    if attempt + 1 == replace_attempts:
+                        raise
+                    time.sleep(0.05 * (attempt + 1))
             if hasattr(os, "O_DIRECTORY"):
                 directory_fd = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY)
                 try:
