@@ -5,6 +5,7 @@ from typing import Mapping
 
 from .config import DevRoomConfig, load_config, validate_config
 from .orchestrator import AgentProvider, DevRoomOrchestrator, ResourceGuard
+from .state_store import WorkflowStateWriter
 from .provider_factory import ProviderFactory, ProviderSpec, build_default_factory
 from .provider_registry import ProviderRegistry
 from .provider_router import DEFAULT_ROLE_BINDINGS, RoleBinding
@@ -25,12 +26,14 @@ def build_orchestrator(
     *,
     bindings: Mapping[str, RoleBinding] | None = None,
     factory: ProviderFactory | None = None,
+    state_writer: WorkflowStateWriter | None = None,
 ) -> DevRoomOrchestrator:
     """Construct the execution stack from provider specifications."""
     registry = build_provider_registry(specs, factory=factory)
     return DevRoomOrchestrator.with_provider_registry(
         registry,
         bindings or DEFAULT_ROLE_BINDINGS,
+        state_writer=state_writer,
     )
 
 
@@ -38,10 +41,16 @@ def build_from_config(
     config: DevRoomConfig,
     *,
     factory: ProviderFactory | None = None,
+    state_writer: WorkflowStateWriter | None = None,
 ) -> DevRoomOrchestrator:
     """Construct the complete execution stack from a loaded DevRoom config."""
     validate_config(config)
-    orchestrator = build_orchestrator(config.providers, bindings=config.bindings, factory=factory)
+    orchestrator = build_orchestrator(
+        config.providers,
+        bindings=config.bindings,
+        factory=factory,
+        state_writer=state_writer,
+    )
     orchestrator.resource_guard = ResourceGuard(
         cooldown_after_seconds=config.cooldown_after_seconds,
         cooldown_seconds=config.cooldown_seconds,
