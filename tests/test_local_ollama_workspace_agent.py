@@ -46,6 +46,10 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 LocalOllamaWorkspaceAgent(model="gemma4:e4b")._generate_structured("test")
 
+    def test_stall_timeout_configuration_is_accepted(self):
+        agent = LocalOllamaWorkspaceAgent(model="gemma4:e4b", stall_timeout_seconds=1800)
+        self.assertEqual(agent.stall_timeout_seconds, 1800)
+
     def test_scope_is_explicit(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace = LocalWorkspaceProvider(directory)
