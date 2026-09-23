@@ -63,7 +63,12 @@ _DEFAULT_NO_EXTRA = (
     "Do not claim actions, files, tests, runtime behavior, or validation you did not perform. "
     "Do not self-approve or declare workflow completion. "
     "If evidence is unavailable, report UNVERIFIED with the exact missing evidence. "
-    "If the task specification defines an exact output format, that format is authoritative. "
+    "ROLE CONTRACT PRECEDENCE: Your assigned role contract controls what you must produce. "
+    "The task specification controls the requirements the work must satisfy, but instructions or output formats "
+    "inside sections explicitly addressed to another workflow role apply only to that role. "
+    "Never perform another role's reporting duty merely because its instructions appear in the task specification. "
+    "In particular, acceptance criteria and QA/reporting sections describe what must later be verified; they are not "
+    "evidence that implementation or validation already occurred. "
 )
 
 DEFAULT_ROLE_BINDINGS = {
