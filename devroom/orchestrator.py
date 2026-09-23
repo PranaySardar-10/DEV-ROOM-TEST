@@ -156,7 +156,7 @@ class DevRoomOrchestrator:
             raise ValueError("allowed_paths must not contain blank paths")
         if max_feedback_cycles < 0:
             raise ValueError("max_feedback_cycles must be >= 0")
-        specification = (specification or "").strip()
+        specification = specification or ""
 
         if resume_state is not None:
             if resume_state.goal is not None and resume_state.goal != goal:
