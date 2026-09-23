@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import time
 from pathlib import Path
 
@@ -42,6 +43,7 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
+    control_token = os.environ.get("DEVROOM_CONTROL_TOKEN")
 
     workspace = Path(args.workspace).resolve()
     if not workspace.is_dir():
@@ -75,7 +77,12 @@ def main() -> None:
         state_writer=writer,
         max_feedback_cycles=args.max_feedback_cycles,
     )
-    server = serve_control_api(controller, host=args.host, port=args.port)
+    server = serve_control_api(
+        controller,
+        host=args.host,
+        port=args.port,
+        control_token=control_token,
+    )
     print(f"DevRoom control API listening on http://{args.host}:{server.server_address[1]}")
     print(f"Workflow: {args.workflow_id}")
     print("Press Ctrl+C to stop.")
