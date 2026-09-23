@@ -62,6 +62,39 @@ class LocalWorkspaceProviderTests(unittest.TestCase):
                     timeout_seconds=1,
                 )
 
+    def test_require_implementation_branch_rejects_non_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = LocalWorkspaceProvider(directory)
+            with self.assertRaises(RuntimeError):
+                provider.require_implementation_branch()
+
+    def test_require_implementation_branch_rejects_detached_head(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = LocalWorkspaceProvider(directory)
+            provider.run_command(("git", "init"), approved_executables=("git",))
+            provider.run_command(("git", "config", "user.email", "devroom@test.local"), approved_executables=("git",))
+            provider.run_command(("git", "config", "user.name", "DevRoom Test"), approved_executables=("git",))
+            provider.write_file("seed.txt", "seed")
+            provider.run_command(("git", "add", "seed.txt"), approved_executables=("git",))
+            provider.run_command(("git", "commit", "-m", "seed"), approved_executables=("git",))
+            provider.run_command(("git", "checkout", "--detach", "HEAD"), approved_executables=("git",))
+            with self.assertRaises(PermissionError):
+                provider.require_implementation_branch()
+
+    def test_require_implementation_branch_rejects_protected_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = LocalWorkspaceProvider(directory)
+            provider.run_command(("git", "init", "-b", "main"), approved_executables=("git",))
+            with self.assertRaises(PermissionError):
+                provider.require_implementation_branch()
+
+    def test_require_implementation_branch_accepts_feature_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            provider = LocalWorkspaceProvider(directory)
+            provider.run_command(("git", "init", "-b", "main"), approved_executables=("git",))
+            provider.run_command(("git", "checkout", "-b", "agent/implementer/test-1"), approved_executables=("git",))
+            self.assertEqual(provider.require_implementation_branch(), "agent/implementer/test-1")
+
     def test_git_diff_is_available_for_repository_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             provider = LocalWorkspaceProvider(directory)
