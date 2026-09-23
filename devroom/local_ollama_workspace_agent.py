@@ -161,7 +161,15 @@ class LocalOllamaWorkspaceAgent:
 
     @staticmethod
     def _build_prompt(task: AgentTask, allowed: set[str], workspace: LocalWorkspaceProvider) -> str:
-        relevant_keys = {"proposal", "architecture", "feedback", "revision_instruction"}
+        relevant_keys = {
+            "approved_proposal",
+            "architecture_summary",
+            "approval_feedback",
+            "proposal",
+            "architecture",
+            "feedback",
+            "revision_instruction",
+        }
         context = "\n".join(
             f"- {key}: {task.context[key]}"
             for key in sorted(relevant_keys)
