@@ -231,8 +231,8 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "interrupted Implementer execution"):
                 DevRoomOrchestrator(MockProvider()).run(
                     "Interrupted implementation",
-                    workspace=r"D:\\DEV_ROOM_TEST",
-                    allowed_paths=("Assets/Test.cs",),
+                    workspace=None,
+                    allowed_paths=(),
                     human_gate=self.approve_all,
                     resume_state=persisted,
                 )
