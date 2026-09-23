@@ -109,6 +109,49 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
         self.assertEqual(body["options"]["temperature"], 0)
         self.assertEqual(request.full_url, "http://localhost:11434/api/generate")
 
+    def test_write_failure_rolls_back_all_changes(self) -> None:
+        class FailingWorkspace(LocalWorkspaceProvider):
+            def __init__(self, workspace):
+                super().__init__(workspace)
+                self.write_count = 0
+
+            def write_file(self, relative_path, content):
+                self.write_count += 1
+                path = super().write_file(relative_path, content)
+                if self.write_count == 2:
+                    raise OSError("disk write failed")
+                return path
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "a.txt").write_text("original", encoding="utf-8")
+            workspace = FailingWorkspace(root)
+            task = AgentTask(
+                role="Implementer",
+                goal="Update two files",
+                context={
+                    "sandbox": WORKSPACE_WRITE,
+                    "allowed_paths": "a.txt,b.txt",
+                },
+            )
+            agent = LocalOllamaWorkspaceAgent(model="gemma4:e4b")
+            with unittest.mock.patch.object(
+                agent,
+                "_generate_structured",
+                return_value={
+                    "summary": "two files",
+                    "files": [
+                        {"path": "a.txt", "content": "changed"},
+                        {"path": "b.txt", "content": "created"},
+                    ],
+                },
+            ):
+                with self.assertRaisesRegex(OSError, "disk write failed"):
+                    agent.execute_in_workspace(task, workspace)
+
+            self.assertEqual((root / "a.txt").read_text(encoding="utf-8"), "original")
+            self.assertFalse((root / "b.txt").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
