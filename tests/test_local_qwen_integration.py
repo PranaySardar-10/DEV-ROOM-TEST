@@ -22,7 +22,7 @@ class LocalQwenIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(provider.__class__.__name__, "LocalOllamaProvider")
 
-    @patch("devroom.provider_health._ollama_model_available", return_value=(True, "mocked model available"))
+    @patch("devroom.provider_health._ollama_model_available", return_value=(True, "Ollama API reachable and configured model is installed: 'qwen2.5-coder:3b'."))
     @patch("devroom.provider_health.shutil.which", return_value="C:/tools/ollama.exe")
     def test_local_qwen_cli_is_reported_available(self, _which, _model) -> None:
         result = diagnose_providers(
