@@ -7,6 +7,7 @@ import time
 
 from .errors import AgentPreflightError
 from .state_store import PersistedWorkflow, WorkflowStateWriter
+from .workspace_provider import LocalWorkspaceProvider
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -321,6 +322,33 @@ class DevRoomOrchestrator:
             persist(stage, in_flight_role=None)
             return result
 
+        def collect_qa_evidence() -> dict[str, str]:
+            if workspace is None:
+                return {"workspace_evidence": "No workspace was supplied; filesystem verification is unavailable."}
+            provider = LocalWorkspaceProvider(workspace)
+            inspection = provider.inspect()
+            files = "\n".join(str(path) for path in inspection["files"])
+            git_status = "\n".join(str(item) for item in inspection["git"])
+            allowed = ", ".join(str(path) for path in allowed_paths) or "<none>"
+            contents: list[str] = []
+            for relative_path in allowed_paths:
+                try:
+                    content = provider.read_file(str(relative_path))
+                except FileNotFoundError:
+                    content = "<FILE NOT FOUND>"
+                contents.append(
+                    f"FILE {relative_path}\nBEGIN ACTUAL CONTENT\n{content}\nEND ACTUAL CONTENT"
+                )
+            return {
+                "workspace_evidence": (
+                    f"WORKSPACE: {inspection['workspace']}\n"
+                    f"ACTUAL FILES (excluding .git/__pycache__):\n{files or '<none>'}\n"
+                    f"ACTUAL GIT STATUS:\n{git_status or '<clean>'}\n"
+                    f"APPROVED PATHS: {allowed}\n"
+                    + "\n\n".join(contents)
+                )
+            }
+
         def gate(
             stage: Stage,
             prompt: str,
@@ -407,14 +435,16 @@ class DevRoomOrchestrator:
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
 
+            qa_context = {
+                "implementation_summary": implementation.summary,
+                "approved_proposal": proposal.summary,
+            }
+            qa_context.update(collect_qa_evidence())
             qa = call(
                 Stage.QA,
                 "QA",
                 f"Run automated validation for the integrated implementation: {goal}",
-                {
-                    "implementation_summary": implementation.summary,
-                    "approved_proposal": proposal.summary,
-                },
+                qa_context,
             )
 
             validation_decision, validation_feedback = gate(
