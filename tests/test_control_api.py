@@ -1,4 +1,5 @@
 import json
+import socket
 import time
 import unittest
 from urllib.error import HTTPError
@@ -103,6 +104,30 @@ class ControlApiTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+
+    def test_startup_failure_closes_bound_server(self) -> None:
+        class FailingController(WorkflowController):
+            def start(self):
+                raise RuntimeError("simulated startup failure")
+
+        controller = FailingController(
+            MockProvider(),
+            workflow_id="startup-failure",
+            goal="Startup failure cleanup",
+        )
+        probe = socket.socket()
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+        probe.close()
+
+        with self.assertRaisesRegex(RuntimeError, "simulated startup failure"):
+            serve_control_api(controller, host="127.0.0.1", port=port)
+
+        replacement = socket.socket()
+        try:
+            replacement.bind(("127.0.0.1", port))
+        finally:
+            replacement.close()
 
     def test_remote_bind_requires_control_token(self) -> None:
         controller = WorkflowController(MockProvider(), workflow_id="remote-bind", goal="Remote bind")
