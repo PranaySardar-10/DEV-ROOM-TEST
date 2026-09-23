@@ -169,6 +169,28 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             self.assertEqual(len(result.results), len(persisted.results))
             self.assertIsNone(persisted.halted_reason)
 
+    def test_agent_failure_persists_halt_and_releases_guard(self) -> None:
+        class FailingProvider(MockProvider):
+            def execute(self, task):
+                self.calls.append(task)
+                if task.role == "Architect":
+                    raise RuntimeError("model unavailable")
+                return super().execute(task)
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "workflow-failure")
+            result = None
+            with self.assertRaisesRegex(RuntimeError, "model unavailable"):
+                DevRoomOrchestrator(
+                    FailingProvider(),
+                    state_writer=writer,
+                ).run("Fail safely")
+
+            persisted = JsonWorkflowStateStore(path).load("workflow-failure")
+            self.assertEqual(persisted.stage, Stage.HALTED.value)
+            self.assertIn("Architect execution failed", persisted.halted_reason or "")
+
     def test_resource_guard_cools_down_after_continuous_limit(self) -> None:
         now = [0.0]
         sleeps = []
