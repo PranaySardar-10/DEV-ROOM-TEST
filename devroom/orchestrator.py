@@ -198,10 +198,16 @@ class DevRoomOrchestrator:
             if allowed_paths:
                 task_context["allowed_paths"] = ",".join(str(path) for path in allowed_paths)
             self.resource_guard.before_agent()
-            result = self.provider.execute(
-                AgentTask(role=role, goal=task_goal, context=task_context)
-            )
-            self.resource_guard.after_agent()
+            try:
+                result = self.provider.execute(
+                    AgentTask(role=role, goal=task_goal, context=task_context)
+                )
+            except Exception as exc:
+                reason = f"{role} execution failed: {type(exc).__name__}: {exc}"
+                persist(Stage.HALTED, reason)
+                raise
+            finally:
+                self.resource_guard.after_agent()
             results.append(result)
             persist(stage)
             return result
