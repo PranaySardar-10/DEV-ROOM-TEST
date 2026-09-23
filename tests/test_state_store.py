@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -43,6 +44,49 @@ class WorkflowStateStoreTests(unittest.TestCase):
             )
             with self.assertRaises(ValueError):
                 store.load("abc")
+
+    def test_rejects_corrupt_and_malformed_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            store = JsonWorkflowStateStore(path)
+
+            path.write_text("{not-json", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                store.load("abc")
+
+            path.write_text(json.dumps({
+                "schema_version": 2,
+                "workflow_id": "abc",
+                "stage": "complete",
+                "history": "not-a-list",
+                "results": [],
+            }), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                store.load("abc")
+
+            path.write_text(json.dumps({
+                "schema_version": 2,
+                "workflow_id": "abc",
+                "stage": "complete",
+                "history": [],
+                "results": [{"role": "Lead", "summary": 123}],
+            }), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                store.load("abc")
+
+    def test_accepts_legacy_v1_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            path.write_text(json.dumps({
+                "schema_version": 1,
+                "workflow_id": "legacy",
+                "stage": "human_review",
+                "history": ["lead", "architect", "coder", "human_review"],
+                "results": [],
+            }), encoding="utf-8")
+            state = JsonWorkflowStateStore(path).load("legacy")
+            self.assertEqual(state.max_feedback_cycles, 3)
+            self.assertEqual(state.allowed_paths, ())
 
 
 if __name__ == "__main__":
