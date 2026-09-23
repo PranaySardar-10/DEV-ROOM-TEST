@@ -34,6 +34,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--config", required=True, help="Path to devroom.json")
     parser.add_argument("--goal", help="Workflow goal")
     parser.add_argument("--workspace", help="Target workspace")
+    parser.add_argument("--spec-file", help="UTF-8 task specification file propagated to every production agent")
     parser.add_argument(
         "--allowed-path",
         action="append",
@@ -91,11 +92,17 @@ def main() -> int:
             workspace = resume_state.workspace
             allowed_paths = resume_state.allowed_paths
             max_feedback_cycles = resume_state.max_feedback_cycles
+            specification = resume_state.specification or ""
         else:
             goal = args.goal
             workspace = args.workspace
             allowed_paths = tuple(args.allowed_path)
             max_feedback_cycles = args.max_feedback_cycles
+            if not args.spec_file:
+                raise ValueError("--spec-file is required for a new production workflow")
+            specification = Path(args.spec_file).read_text(encoding="utf-8").strip()
+            if not specification:
+                raise ValueError("--spec-file must not be empty")
         state_writer = WorkflowStateWriter(state_store, workflow_id)
         orchestrator = build_from_config(config, state_writer=state_writer)
     except (OSError, ValueError, RuntimeError) as exc:
@@ -108,6 +115,7 @@ def main() -> int:
         allowed_paths=allowed_paths,
         human_gate=_human_gate,
         max_feedback_cycles=max_feedback_cycles,
+        specification=specification,
         resume_state=resume_state,
     )
     print(f"\nDevRoom finished: {result.stage.value}")
