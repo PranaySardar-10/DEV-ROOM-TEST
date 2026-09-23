@@ -279,9 +279,18 @@ def serve_control_api(
     handler.controller = controller
     handler.control_token = control_token
     server = ThreadingHTTPServer((host, port), handler)
-    controller.start()
-    thread = threading.Thread(target=server.serve_forever, name="devroom-control-api", daemon=True)
-    thread.start()
+    try:
+        controller.start()
+    except Exception:
+        server.server_close()
+        raise
+    try:
+        thread = threading.Thread(target=server.serve_forever, name="devroom-control-api", daemon=True)
+        thread.start()
+    except Exception:
+        server.shutdown()
+        server.server_close()
+        raise
     return server
 
 
