@@ -168,6 +168,14 @@ class DevRoomOrchestrator:
                 raise ValueError("resume state has an invalid stage") from exc
             if not resume_state.history or resume_state.history[-1] != persisted_stage.value:
                 raise ValueError("resume state stage does not match its history checkpoint")
+            if resume_state.stage in {Stage.COMPLETE.value, Stage.HALTED.value}:
+                raise ValueError("terminal workflow state cannot be resumed")
+            if resume_state.in_flight_role is not None:
+                if not resume_state.history or resume_state.history[-1] != resume_state.in_flight_role.lower():
+                    raise ValueError("resume state in-flight role does not match its history checkpoint")
+                raise ValueError(
+                    f"workflow has an interrupted {resume_state.in_flight_role} execution; reconcile the workspace before resuming"
+                )
             expected_roles = [
                 {
                     Stage.LEAD: "Lead",
@@ -186,21 +194,8 @@ class DevRoomOrchestrator:
                 }
             ]
             actual_roles = [str(item["role"]) for item in resume_state.results]
-            completed_expected_roles = expected_roles
-            if resume_state.in_flight_role is not None:
-                if not expected_roles or expected_roles[-1] != resume_state.in_flight_role:
-                    raise ValueError("resume state in-flight role does not match its history checkpoint")
-                completed_expected_roles = expected_roles[:-1]
-            if actual_roles != completed_expected_roles:
+            if actual_roles != expected_roles:
                 raise ValueError("resume state results do not match the workflow history checkpoint")
-            if resume_state.stage in {Stage.COMPLETE.value, Stage.HALTED.value}:
-                raise ValueError("terminal workflow state cannot be resumed")
-            if resume_state.in_flight_role is not None:
-                if not resume_state.history or resume_state.history[-1] != resume_state.in_flight_role.lower():
-                    raise ValueError("resume state in-flight role does not match its history checkpoint")
-                raise ValueError(
-                    f"workflow has an interrupted {resume_state.in_flight_role} execution; reconcile the workspace before resuming"
-                )
 
         history: list[Stage] = (
             [Stage(item) for item in resume_state.history]
