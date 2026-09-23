@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Callable, Mapping, Protocol
 import time
 
-from .state_store import WorkflowStateWriter
+from .state_store import PersistedWorkflow, WorkflowStateWriter
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -142,6 +142,7 @@ class DevRoomOrchestrator:
         allowed_paths: tuple[str, ...] = (),
         human_gate: HumanGate | None = None,
         max_feedback_cycles: int = 3,
+        resume_state: PersistedWorkflow | None = None,
     ) -> WorkflowResult:
         if not goal.strip():
             raise ValueError("goal must not be empty")
@@ -152,10 +153,42 @@ class DevRoomOrchestrator:
         if max_feedback_cycles < 0:
             raise ValueError("max_feedback_cycles must be >= 0")
 
-        history: list[Stage] = []
-        results: list[AgentResult] = []
-        persisted_decision: HumanDecision | None = None
-        persisted_feedback: str | None = None
+        if resume_state is not None:
+            if resume_state.goal is not None and resume_state.goal != goal:
+                raise ValueError("resume state goal does not match the requested goal")
+            if resume_state.workspace != workspace:
+                raise ValueError("resume state workspace does not match the requested workspace")
+            if resume_state.allowed_paths != tuple(allowed_paths):
+                raise ValueError("resume state allowed_paths do not match the requested scope")
+            if resume_state.max_feedback_cycles != max_feedback_cycles:
+                raise ValueError("resume state max_feedback_cycles does not match the requested limit")
+            if resume_state.stage in {Stage.COMPLETE.value, Stage.HALTED.value}:
+                raise ValueError("terminal workflow state cannot be resumed")
+
+        history: list[Stage] = (
+            [Stage(item) for item in resume_state.history]
+            if resume_state is not None else []
+        )
+        results: list[AgentResult] = (
+            [
+                AgentResult(
+                    role=str(item["role"]),
+                    summary=str(item["summary"]),
+                    artifacts=tuple(str(path) for path in item.get("artifacts", [])),
+                )
+                for item in resume_state.results
+            ]
+            if resume_state is not None else []
+        )
+        replay_index = 0
+        persisted_decision: HumanDecision | None = (
+            HumanDecision(resume_state.last_decision)
+            if resume_state is not None and resume_state.last_decision else None
+        )
+        persisted_feedback: str | None = (
+            resume_state.last_feedback if resume_state is not None else None
+        )
+        replay_gate = resume_state.stage if resume_state is not None else None
 
         def persist(
             stage: Stage,
@@ -183,6 +216,10 @@ class DevRoomOrchestrator:
                 halted_reason=halted_reason,
                 last_decision=(persisted_decision.value if persisted_decision is not None else None),
                 last_feedback=persisted_feedback,
+                goal=goal,
+                workspace=workspace,
+                allowed_paths=allowed_paths,
+                max_feedback_cycles=max_feedback_cycles,
             )
 
         def call(
@@ -191,7 +228,19 @@ class DevRoomOrchestrator:
             task_goal: str,
             context: dict[str, str] | None = None,
         ) -> AgentResult:
-            history.append(stage)
+            nonlocal replay_index
+            if resume_state is not None and replay_index < len(resume_state.results):
+                stored = resume_state.results[replay_index]
+                expected_role = str(stored["role"])
+                if expected_role == role:
+                    replay_index += 1
+                    return AgentResult(
+                        role=expected_role,
+                        summary=str(stored["summary"]),
+                        artifacts=tuple(str(path) for path in stored.get("artifacts", [])),
+                    )
+            if not history or history[-1] is not stage:
+                history.append(stage)
             task_context = dict(context or {})
             if workspace is not None:
                 task_context["workspace"] = str(workspace)
@@ -217,7 +266,12 @@ class DevRoomOrchestrator:
             prompt: str,
             context: Mapping[str, str],
         ) -> tuple[HumanDecision, str]:
-            history.append(stage)
+            nonlocal replay_gate
+            if not history or history[-1] is not stage:
+                history.append(stage)
+            if replay_gate == stage.value and persisted_decision is not None:
+                replay_gate = None
+                return persisted_decision, persisted_feedback or ""
             persist(stage)
             if human_gate is None:
                 return HumanDecision.HALT, f"{stage.value} requires explicit human decision."
