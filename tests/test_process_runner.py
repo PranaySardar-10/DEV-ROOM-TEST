@@ -1,0 +1,30 @@
+import sys
+import unittest
+
+from devroom.process_runner import run_with_stall_timeout
+
+
+class ProcessRunnerTests(unittest.TestCase):
+    def test_long_running_process_is_allowed_when_output_continues(self) -> None:
+        script = (
+            "import sys,time; "
+            "[(print('progress', flush=True), time.sleep(0.15)) for _ in range(5)]"
+        )
+        result = run_with_stall_timeout(
+            (sys.executable, "-c", script),
+            stall_timeout_seconds=0.4,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("progress", result.stdout)
+
+    def test_process_is_terminated_after_observable_stall(self) -> None:
+        script = "import time; print('started', flush=True); time.sleep(2)"
+        with self.assertRaisesRegex(TimeoutError, "stalled"):
+            run_with_stall_timeout(
+                (sys.executable, "-c", script),
+                stall_timeout_seconds=0.2,
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()
