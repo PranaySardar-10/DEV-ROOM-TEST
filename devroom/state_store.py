@@ -20,6 +20,7 @@ class PersistedWorkflow:
     workspace: str | None = None
     allowed_paths: tuple[str, ...] = ()
     max_feedback_cycles: int = 3
+    specification: str | None = None
     in_flight_role: str | None = None
     last_decision_stage: str | None = None
 
@@ -27,7 +28,7 @@ class PersistedWorkflow:
 class JsonWorkflowStateStore:
     """Small durable state store for resumable DevRoom workflow records."""
 
-    schema_version = 2
+    schema_version = 3
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -46,6 +47,7 @@ class JsonWorkflowStateStore:
             "workspace": state.workspace,
             "allowed_paths": list(state.allowed_paths),
             "max_feedback_cycles": state.max_feedback_cycles,
+            "specification": state.specification,
             "in_flight_role": state.in_flight_role,
             "last_decision_stage": state.last_decision_stage,
         }
@@ -78,7 +80,7 @@ class JsonWorkflowStateStore:
 
         if not isinstance(payload, dict):
             raise ValueError("Workflow state root must be an object.")
-        if payload.get("schema_version") not in {1, self.schema_version}:
+        if payload.get("schema_version") not in {1, 2, self.schema_version}:
             raise ValueError("Unsupported workflow state schema version.")
         if payload.get("workflow_id") != workflow_id:
             raise KeyError(f"Workflow state not found: {workflow_id!r}")
@@ -108,7 +110,7 @@ class JsonWorkflowStateStore:
         if isinstance(max_feedback_cycles, bool) or not isinstance(max_feedback_cycles, int) or max_feedback_cycles < 0:
             raise ValueError("Workflow state has invalid max_feedback_cycles.")
 
-        for field in ("halted_reason", "last_decision", "last_feedback", "goal", "workspace", "in_flight_role", "last_decision_stage"):
+        for field in ("halted_reason", "last_decision", "last_feedback", "goal", "workspace", "specification", "in_flight_role", "last_decision_stage"):
             value = payload.get(field)
             if value is not None and not isinstance(value, str):
                 raise ValueError(f"Workflow state field {field!r} must be a string or null.")
@@ -125,6 +127,7 @@ class JsonWorkflowStateStore:
             workspace=payload.get("workspace"),
             allowed_paths=tuple(allowed_paths),
             max_feedback_cycles=max_feedback_cycles,
+            specification=payload.get("specification"),
             in_flight_role=payload.get("in_flight_role"),
             last_decision_stage=payload.get("last_decision_stage"),
         )
@@ -151,6 +154,7 @@ class WorkflowStateWriter:
         workspace: str | None = None,
         allowed_paths: Iterable[str] = (),
         max_feedback_cycles: int = 3,
+        specification: str | None = None,
         in_flight_role: str | None = None,
         last_decision_stage: str | None = None,
     ) -> None:
@@ -167,6 +171,7 @@ class WorkflowStateWriter:
                 workspace=workspace,
                 allowed_paths=tuple(allowed_paths),
                 max_feedback_cycles=max_feedback_cycles,
+                specification=specification,
                 in_flight_role=in_flight_role,
                 last_decision_stage=last_decision_stage,
             )
