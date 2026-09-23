@@ -62,6 +62,18 @@ class CliStartupTests(unittest.TestCase):
         build.assert_not_called()
         self.assertIn("provider unavailable", error.getvalue())
 
+    def test_parse_args_accepts_resume(self) -> None:
+        with patch("sys.argv", [
+            "devroom",
+            "--config", "devroom.json",
+            "--resume",
+            "--workflow-id", "workflow-123",
+        ]):
+            args = cli._parse_args()
+
+        self.assertTrue(args.resume)
+        self.assertEqual(args.workflow_id, "workflow-123")
+
 
 if __name__ == "__main__":
     unittest.main()
