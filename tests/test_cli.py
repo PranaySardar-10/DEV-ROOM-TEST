@@ -14,10 +14,12 @@ class CliStartupTests(unittest.TestCase):
             config="devroom.json",
             goal=None,
             workspace=None,
+            spec_file=None,
             max_feedback_cycles=3,
             check=True,
             state_dir=".devroom/state",
             workflow_id=None,
+            spec_file=None,
         )
         config = SimpleNamespace(providers=(ProviderSpec("codex", "codex-cli"),))
 
