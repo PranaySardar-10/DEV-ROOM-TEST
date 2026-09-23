@@ -17,6 +17,10 @@ class WorkflowStateStoreTests(unittest.TestCase):
                 results=(
                     {"role": "Lead", "summary": "ok", "artifacts": []},
                 ),
+                goal="Test resume",
+                workspace=r"D:\\workspace",
+                allowed_paths=("Assets/Test.cs",),
+                max_feedback_cycles=2,
             )
             store.save(state)
 
