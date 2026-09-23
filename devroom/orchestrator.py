@@ -164,6 +164,10 @@ class DevRoomOrchestrator:
                 raise ValueError("resume state max_feedback_cycles does not match the requested limit")
             if resume_state.stage in {Stage.COMPLETE.value, Stage.HALTED.value}:
                 raise ValueError("terminal workflow state cannot be resumed")
+            if resume_state.in_flight_role is not None:
+                raise ValueError(
+                    f"workflow has an interrupted {resume_state.in_flight_role} execution; reconcile the workspace before resuming"
+                )
 
         history: list[Stage] = (
             [Stage(item) for item in resume_state.history]
@@ -195,6 +199,7 @@ class DevRoomOrchestrator:
             halted_reason: str | None = None,
             last_decision: HumanDecision | None = None,
             last_feedback: str | None = None,
+            in_flight_role: str | None = None,
         ) -> None:
             nonlocal persisted_decision, persisted_feedback
             if last_decision is not None:
@@ -220,6 +225,7 @@ class DevRoomOrchestrator:
                 workspace=workspace,
                 allowed_paths=allowed_paths,
                 max_feedback_cycles=max_feedback_cycles,
+                in_flight_role=in_flight_role,
             )
 
         def call(
@@ -247,6 +253,7 @@ class DevRoomOrchestrator:
             if allowed_paths:
                 task_context["allowed_paths"] = ",".join(str(path) for path in allowed_paths)
             self.resource_guard.before_agent()
+            persist(stage, in_flight_role=role)
             try:
                 result = self.provider.execute(
                     AgentTask(role=role, goal=task_goal, context=task_context)
@@ -258,7 +265,7 @@ class DevRoomOrchestrator:
             finally:
                 self.resource_guard.after_agent()
             results.append(result)
-            persist(stage)
+            persist(stage, in_flight_role=None)
             return result
 
         def gate(
