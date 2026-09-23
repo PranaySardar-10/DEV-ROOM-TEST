@@ -54,7 +54,8 @@ def load_config(path: str | Path) -> DevRoomConfig:
         )
 
     cooldown = raw.get("resource_guard", {})
-    if not isinstance(cooldown, dict): raise ValueError("'resource_guard' must be an object.")
+    if not isinstance(cooldown, dict):
+        raise ValueError("'resource_guard' must be an object.")
     try:
         cooldown_after_seconds = float(cooldown.get("cooldown_after_seconds", 3600.0))
         cooldown_seconds = float(cooldown.get("cooldown_seconds", 45.0))
@@ -143,6 +144,15 @@ def write_example_config(path: str | Path) -> Path:
                 "options": {
                     "command": "ollama",
                     "model": "gemma4:e4b",
+                    "timeout_seconds": 600,
+                },
+            },
+            {
+                "name": "qwen2.5-coder-3b-workspace-local",
+                "kind": "local-ollama-workspace",
+                "options": {
+                    "command": "ollama",
+                    "model": "qwen2.5-coder:3b",
                     "timeout_seconds": 600,
                 },
             },
