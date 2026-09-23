@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hmac
+import ipaddress
 import json
 import threading
 from dataclasses import asdict, dataclass
@@ -176,14 +178,36 @@ class WorkflowController:
 
 class _Handler(BaseHTTPRequestHandler):
     controller: WorkflowController | None = None
+    control_token: str | None = None
+
+    def _is_authorized(self) -> bool:
+        if self.control_token is None:
+            return True
+        expected = f"Bearer {self.control_token}"
+        provided = self.headers.get("Authorization", "")
+        return hmac.compare_digest(provided, expected)
+
+    def _is_loopback_origin(self) -> bool:
+        origin = self.headers.get("Origin", "")
+        if not origin:
+            return False
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(origin)
+            return parsed.scheme in {"http", "https"} and ipaddress.ip_address(parsed.hostname or "").is_loopback
+        except ValueError:
+            return False
 
     def _send(self, status: int, payload: Mapping[str, Any]) -> None:
         data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        origin = self.headers.get("Origin")
+        if origin and self._is_loopback_origin():
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
         self.end_headers()
         if status != 204:
@@ -197,6 +221,9 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, {"ok": True})
             return
         if self.path == "/api/workflow" and self.controller is not None:
+            if not self._is_authorized():
+                self._send(401, {"error": "unauthorized"})
+                return
             self._send(200, self.controller.snapshot())
             return
         self._send(404, {"error": "not found"})
@@ -204,6 +231,9 @@ class _Handler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path != "/api/workflow/decision" or self.controller is None:
             self._send(404, {"error": "not found"})
+            return
+        if not self._is_authorized():
+            self._send(401, {"error": "unauthorized"})
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
@@ -222,9 +252,19 @@ def serve_control_api(
     *,
     host: str = "127.0.0.1",
     port: int = 8765,
+    control_token: str | None = None,
 ) -> ThreadingHTTPServer:
-    """Start the local control API and return its server for lifecycle management."""
+    """Start the control API and return its server for lifecycle management."""
+    try:
+        is_loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        is_loopback = host.lower() in {"localhost", "localhost.localdomain"}
+    if not is_loopback and not control_token:
+        raise ValueError("control_token is required when binding the control API to a non-loopback host")
+    if control_token is not None and not control_token.strip():
+        raise ValueError("control_token must not be blank")
     _Handler.controller = controller
+    _Handler.control_token = control_token
     server = ThreadingHTTPServer((host, port), _Handler)
     controller.start()
     thread = threading.Thread(target=server.serve_forever, name="devroom-control-api", daemon=True)
