@@ -107,6 +107,31 @@ class LocalWorkspaceProvider:
             )
         return branch
 
+    def require_implementation_branch(self) -> str:
+        """Require a dedicated Implementer task branch in a Git workspace."""
+        repository = self.run_command(
+            ("git", "rev-parse", "--is-inside-work-tree"),
+            approved_executables=("git",),
+        )
+        if repository.returncode != 0 or repository.stdout.strip().lower() != "true":
+            raise RuntimeError("Implementer workspace must be a Git repository.")
+
+        branch = self.run_command(
+            ("git", "symbolic-ref", "--quiet", "--short", "HEAD"),
+            approved_executables=("git",),
+        )
+        if branch.returncode != 0 or not branch.stdout.strip():
+            raise PermissionError("Implementer workspace must be on a named Git branch.")
+
+        name = branch.stdout.strip()
+        if name in {"main", "master"}:
+            raise PermissionError(f"Implementer cannot modify protected branch {name!r}.")
+        if not name.startswith("agent/implementer/"):
+            raise PermissionError(
+                "Implementer workspace must use an agent/implementer/<task-id> branch."
+            )
+        return name
+
     def git_diff(self) -> str:
         result = self.run_command(
             ("git", "diff", "--no-ext-diff", "--"),
