@@ -61,9 +61,24 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                 for task in provider.calls)
         )
 
-    def test_task_specification_is_propagated_to_every_agent_and_persisted(self) -> None:
+    def test_task_specification_is_role_filtered_and_full_spec_is_persisted(self) -> None:
         provider = MockProvider()
-        specification = "EXACT FOUNDATION SPECIFICATION"
+        specification = """# Objective
+Build foundation.
+
+## Acceptance
+Implement the required foundation.
+
+## QA
+Report exactly:
+STRUCTURE: PASS
+
+## Human Unity validation
+Open Unity and validate.
+
+## Completion
+Do not report completion early.
+"""
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.json"
             writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "spec-test")
@@ -73,7 +88,16 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                 human_gate=self.approve_all,
             )
             self.assertEqual(result.stage, Stage.COMPLETE)
-            self.assertTrue(all(task.context["task_specification"] == specification for task in provider.calls))
+            for task in provider.calls:
+                spec = task.context["task_specification"]
+                if task.role == "QA":
+                    self.assertIn("STRUCTURE: PASS", spec)
+                    self.assertIn("Human Unity validation", spec)
+                    self.assertIn("Completion", spec)
+                else:
+                    self.assertNotIn("STRUCTURE: PASS", spec)
+                    self.assertNotIn("Human Unity validation", spec)
+                    self.assertNotIn("Completion", spec)
             persisted = JsonWorkflowStateStore(path).load("spec-test")
             self.assertEqual(persisted.specification, specification)
 
