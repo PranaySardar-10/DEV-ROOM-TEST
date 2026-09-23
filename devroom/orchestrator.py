@@ -162,6 +162,32 @@ class DevRoomOrchestrator:
                 raise ValueError("resume state allowed_paths do not match the requested scope")
             if resume_state.max_feedback_cycles != max_feedback_cycles:
                 raise ValueError("resume state max_feedback_cycles does not match the requested limit")
+            try:
+                persisted_stage = Stage(resume_state.stage)
+            except ValueError as exc:
+                raise ValueError("resume state has an invalid stage") from exc
+            if not resume_state.history or resume_state.history[-1] != persisted_stage.value:
+                raise ValueError("resume state stage does not match its history checkpoint")
+            expected_roles = [
+                {
+                    Stage.LEAD: "Lead",
+                    Stage.ARCHITECT: "Architect",
+                    Stage.CODER: "Coder",
+                    Stage.IMPLEMENTER: "Implementer",
+                    Stage.QA: "QA",
+                }[Stage(item)]
+                for item in resume_state.history
+                if Stage(item) in {
+                    Stage.LEAD,
+                    Stage.ARCHITECT,
+                    Stage.CODER,
+                    Stage.IMPLEMENTER,
+                    Stage.QA,
+                }
+            ]
+            actual_roles = [str(item["role"]) for item in resume_state.results]
+            if actual_roles != expected_roles:
+                raise ValueError("resume state results do not match the workflow history checkpoint")
             if resume_state.stage in {Stage.COMPLETE.value, Stage.HALTED.value}:
                 raise ValueError("terminal workflow state cannot be resumed")
             if resume_state.in_flight_role is not None:
