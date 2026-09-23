@@ -61,9 +61,14 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.providers[1].kind, "local-ollama-workspace")
             self.assertEqual(config.providers[1].options["model"], "gemma4:e4b")
             self.assertEqual(config.providers[2].options["model"], "qwen3.5:4b")
+            providers_by_name = {provider.name: provider for provider in config.providers}
+            self.assertEqual(
+                providers_by_name["qwen2.5-coder-3b-workspace-local"].options["model"],
+                "qwen2.5-coder:3b",
+            )
             self.assertEqual(
                 config.bindings["Implementer"].provider,
-                "gemma4-e4b-workspace-local",
+                "qwen2.5-coder-3b-workspace-local",
             )
             self.assertEqual(config.bindings["Implementer"].sandbox, "workspace-write")
 
