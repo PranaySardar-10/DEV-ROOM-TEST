@@ -30,6 +30,10 @@ class HumanDecision(str, Enum):
     HALT = "halt"
 
 
+class AgentPreflightError(RuntimeError):
+    """Raised when an agent is blocked before it can modify the workspace."""
+
+
 @dataclass(frozen=True)
 class AgentTask:
     role: str
@@ -180,25 +184,25 @@ class DevRoomOrchestrator:
                 raise ValueError(
                     f"workflow has an interrupted {resume_state.in_flight_role} execution; reconcile the workspace before resuming"
                 )
+            role_by_stage = {
+                Stage.LEAD: "Lead",
+                Stage.ARCHITECT: "Architect",
+                Stage.CODER: "Coder",
+                Stage.IMPLEMENTER: "Implementer",
+                Stage.QA: "QA",
+            }
             expected_roles = [
-                {
-                    Stage.LEAD: "Lead",
-                    Stage.ARCHITECT: "Architect",
-                    Stage.CODER: "Coder",
-                    Stage.IMPLEMENTER: "Implementer",
-                    Stage.QA: "QA",
-                }[Stage(item)]
+                role_by_stage[Stage(item)]
                 for item in resume_state.history
-                if Stage(item) in {
-                    Stage.LEAD,
-                    Stage.ARCHITECT,
-                    Stage.CODER,
-                    Stage.IMPLEMENTER,
-                    Stage.QA,
-                }
+                if Stage(item) in role_by_stage
             ]
             actual_roles = [str(item["role"]) for item in resume_state.results]
-            if actual_roles != expected_roles:
+            if actual_roles != expected_roles[:len(actual_roles)]:
+                raise ValueError("resume state results do not match the workflow history checkpoint")
+            if len(expected_roles) > len(actual_roles):
+                if persisted_stage not in role_by_stage or expected_roles[-1] != role_by_stage[persisted_stage]:
+                    raise ValueError("resume state results do not match the workflow history checkpoint")
+            if len(expected_roles) - len(actual_roles) > 1:
                 raise ValueError("resume state results do not match the workflow history checkpoint")
 
         history: list[Stage] = (
@@ -224,7 +228,17 @@ class DevRoomOrchestrator:
         persisted_feedback: str | None = (
             resume_state.last_feedback if resume_state is not None else None
         )
-        replay_gate = resume_state.stage if resume_state is not None else None
+        replay_gate = (
+            resume_state.last_decision_stage
+            if resume_state is not None
+            else None
+        )
+
+        persisted_decision_stage: str | None = (
+            resume_state.last_decision_stage
+            if resume_state is not None
+            else None
+        )
 
         def persist(
             stage: Stage,
@@ -233,10 +247,11 @@ class DevRoomOrchestrator:
             last_feedback: str | None = None,
             in_flight_role: str | None = None,
         ) -> None:
-            nonlocal persisted_decision, persisted_feedback
+            nonlocal persisted_decision, persisted_feedback, persisted_decision_stage
             if last_decision is not None:
                 persisted_decision = last_decision
                 persisted_feedback = last_feedback
+                persisted_decision_stage = stage.value
             if self.state_writer is None:
                 return
             self.state_writer.write(
@@ -259,6 +274,7 @@ class DevRoomOrchestrator:
                 max_feedback_cycles=max_feedback_cycles,
                 specification=specification,
                 in_flight_role=in_flight_role,
+                last_decision_stage=persisted_decision_stage,
             )
 
         def call(
@@ -293,6 +309,10 @@ class DevRoomOrchestrator:
                 result = self.provider.execute(
                     AgentTask(role=role, goal=task_goal, context=task_context)
                 )
+            except AgentPreflightError as exc:
+                reason = f"{role} preflight failed: {type(exc).__name__}: {exc}"
+                persist(stage, reason, in_flight_role=None)
+                raise
             except Exception as exc:
                 reason = f"{role} execution failed: {type(exc).__name__}: {exc}"
                 persist(Stage.HALTED, reason)
@@ -434,6 +454,7 @@ class DevRoomOrchestrator:
 
 
 __all__ = [
+    "AgentPreflightError",
     "AgentProvider",
     "AgentResult",
     "AgentTask",
