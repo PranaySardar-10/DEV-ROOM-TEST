@@ -52,7 +52,7 @@ class JsonWorkflowStateStore:
 
     def load(self, workflow_id: str) -> PersistedWorkflow:
         payload = json.loads(self.path.read_text(encoding="utf-8"))
-        if payload.get("schema_version") != self.schema_version:
+        if payload.get("schema_version") not in {1, self.schema_version}:
             raise ValueError("Unsupported workflow state schema version.")
         if payload.get("workflow_id") != workflow_id:
             raise KeyError(f"Workflow state not found: {workflow_id!r}")
