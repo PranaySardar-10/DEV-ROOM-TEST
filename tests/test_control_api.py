@@ -1,6 +1,7 @@
 import json
 import time
 import unittest
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from devroom.control_api import WorkflowController, serve_control_api
@@ -98,6 +99,74 @@ class ControlApiTests(unittest.TestCase):
             with urlopen(request, timeout=2) as response:
                 self.assertEqual(response.status, 202)
             self._wait_for_status(controller, "complete")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
+    def test_remote_bind_requires_control_token(self) -> None:
+        controller = WorkflowController(MockProvider(), workflow_id="remote-bind", goal="Remote bind")
+        with self.assertRaises(ValueError):
+            serve_control_api(controller, host="0.0.0.0", port=0)
+
+    def test_control_token_protects_workflow_and_decision(self) -> None:
+        controller = WorkflowController(MockProvider(), workflow_id="auth-test", goal="Test control auth")
+        server = serve_control_api(controller, port=0, control_token="test-secret")
+        try:
+            port = server.server_address[1]
+            with urlopen(f"http://127.0.0.1:{port}/api/health", timeout=2) as response:
+                self.assertEqual(response.status, 200)
+
+            self._wait_for_gate(controller, "human_review")
+            with self.assertRaises(HTTPError) as ctx:
+                urlopen(f"http://127.0.0.1:{port}/api/workflow", timeout=2)
+            self.assertEqual(ctx.exception.code, 401)
+
+            request = Request(
+                f"http://127.0.0.1:{port}/api/workflow/decision",
+                data=json.dumps({"decision": "approve"}).encode(),
+                headers={"Content-Type": "application/json", "Authorization": "Bearer wrong"},
+                method="POST",
+            )
+            with self.assertRaises(HTTPError) as ctx:
+                urlopen(request, timeout=2)
+            self.assertEqual(ctx.exception.code, 401)
+
+            request = Request(
+                f"http://127.0.0.1:{port}/api/workflow/decision",
+                data=json.dumps({"decision": "approve"}).encode(),
+                headers={"Content-Type": "application/json", "Authorization": "Bearer test-secret"},
+                method="POST",
+            )
+            with urlopen(request, timeout=2) as response:
+                self.assertEqual(response.status, 202)
+            self._wait_for_gate(controller, "unity_validation")
+
+            request = Request(
+                f"http://127.0.0.1:{port}/api/workflow/decision",
+                data=json.dumps({"decision": "approve"}).encode(),
+                headers={"Content-Type": "application/json", "Authorization": "Bearer test-secret"},
+                method="POST",
+            )
+            with urlopen(request, timeout=2) as response:
+                self.assertEqual(response.status, 202)
+            self._wait_for_status(controller, "complete")
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_cors_does_not_allow_arbitrary_origins(self) -> None:
+        controller = WorkflowController(MockProvider(), workflow_id="cors-test", goal="Test CORS")
+        server = serve_control_api(controller, port=0)
+        try:
+            port = server.server_address[1]
+            request = Request(f"http://127.0.0.1:{port}/api/health", headers={"Origin": "https://evil.example"})
+            with urlopen(request, timeout=2) as response:
+                self.assertIsNone(response.headers.get("Access-Control-Allow-Origin"))
+
+            request = Request(f"http://127.0.0.1:{port}/api/health", headers={"Origin": "http://127.0.0.1:3000"})
+            with urlopen(request, timeout=2) as response:
+                self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "http://127.0.0.1:3000")
         finally:
             server.shutdown()
             server.server_close()
