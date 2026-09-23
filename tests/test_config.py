@@ -35,6 +35,23 @@ class ConfigTests(unittest.TestCase):
             config = load_config(path)
             self.assertIn("Implementer", config.bindings)
 
+    def test_rejects_invalid_resource_cooldowns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for value in ("not-a-number", "NaN", "Infinity", "-Infinity", -1):
+                path = Path(tmp) / "devroom.json"
+                path.write_text(
+                    json.dumps({
+                        "providers": [],
+                        "resource_guard": {
+                            "cooldown_after_seconds": value,
+                            "cooldown_seconds": 45,
+                        },
+                    }),
+                    encoding="utf-8",
+                )
+                with self.assertRaises(ValueError):
+                    load_config(path)
+
     def test_example_config_is_valid_json(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = write_example_config(Path(tmp) / "devroom.example.json")
