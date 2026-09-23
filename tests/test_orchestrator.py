@@ -60,6 +60,22 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                 for task in provider.calls)
         )
 
+    def test_task_specification_is_propagated_to_every_agent_and_persisted(self) -> None:
+        provider = MockProvider()
+        specification = "EXACT FOUNDATION SPECIFICATION"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "spec-test")
+            result = DevRoomOrchestrator(provider, state_writer=writer).run(
+                "Build foundation",
+                specification=specification,
+                human_gate=self.approve_all,
+            )
+            self.assertEqual(result.stage, Stage.COMPLETE)
+            self.assertTrue(all(task.context["task_specification"] == specification for task in provider.calls))
+            persisted = JsonWorkflowStateStore(path).load("spec-test")
+            self.assertEqual(persisted.specification, specification)
+
     def test_proposal_rejection_returns_to_coder(self) -> None:
         provider = MockProvider()
         decisions = iter([
