@@ -55,7 +55,14 @@ class ProviderRouterTests(unittest.TestCase):
         )
 
         import tempfile
+        from devroom.workspace_provider import LocalWorkspaceProvider
         with tempfile.TemporaryDirectory() as directory:
+            workspace = LocalWorkspaceProvider(directory)
+            workspace.run_command(("git", "init", "-b", "main"), approved_executables=("git",))
+            workspace.run_command(
+                ("git", "checkout", "-b", "agent/implementer/router-test"),
+                approved_executables=("git",),
+            )
             result = router.execute(
                 AgentTask(
                     role="Implementer",
