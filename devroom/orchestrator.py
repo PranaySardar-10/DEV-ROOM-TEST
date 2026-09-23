@@ -196,6 +196,8 @@ class DevRoomOrchestrator:
             if resume_state.stage in {Stage.COMPLETE.value, Stage.HALTED.value}:
                 raise ValueError("terminal workflow state cannot be resumed")
             if resume_state.in_flight_role is not None:
+                if not resume_state.history or resume_state.history[-1] != resume_state.in_flight_role.lower():
+                    raise ValueError("resume state in-flight role does not match its history checkpoint")
                 raise ValueError(
                     f"workflow has an interrupted {resume_state.in_flight_role} execution; reconcile the workspace before resuming"
                 )
