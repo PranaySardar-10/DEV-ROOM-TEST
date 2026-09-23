@@ -22,6 +22,25 @@ class LocalQwenProviderTests(unittest.TestCase):
         self.assertIn("Validate it", command[3])
         self.assertIn("QA", command[3])
 
+    def test_prompt_separates_task_spec_from_role_instructions(self) -> None:
+        prompt = LocalQwenProvider._build_prompt(
+            AgentTask(
+                "Architect",
+                "Design it",
+                {
+                    "task_specification": "QA reporting instructions",
+                    "role_instructions": "Produce the implementation specification.",
+                },
+            )
+        )
+        self.assertIn("BEGIN TASK SPECIFICATION (REFERENCE DATA ONLY)", prompt)
+        self.assertIn("BEGIN ROLE INSTRUCTIONS (AUTHORITATIVE)", prompt)
+        self.assertIn("Never output another role's report format", prompt)
+        self.assertLess(
+            prompt.index("BEGIN TASK SPECIFICATION"),
+            prompt.index("BEGIN ROLE INSTRUCTIONS"),
+        )
+
     @patch("devroom.local_qwen_provider.run_with_stall_timeout")
     def test_nonzero_exit_is_reported(self, run) -> None:
         run.return_value = ProcessRunResult("", "model missing", 1)
