@@ -169,6 +169,50 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             self.assertEqual(len(result.results), len(persisted.results))
             self.assertIsNone(persisted.halted_reason)
 
+    def test_resume_replays_completed_work_and_reopens_pending_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "resume-test")
+
+            def interrupting_gate(stage, prompt, context):
+                raise RuntimeError("simulated process interruption")
+
+            first_provider = MockProvider()
+            with self.assertRaisesRegex(RuntimeError, "simulated process interruption"):
+                DevRoomOrchestrator(first_provider, state_writer=writer).run(
+                    "Resume this workflow",
+                    workspace=r"D:\\DEV_ROOM_TEST",
+                    allowed_paths=("Assets/Test.cs",),
+                    human_gate=interrupting_gate,
+                    max_feedback_cycles=2,
+                )
+
+            persisted = JsonWorkflowStateStore(path).load("resume-test")
+            self.assertEqual(persisted.stage, Stage.HUMAN_REVIEW.value)
+            self.assertIsNone(persisted.last_decision)
+            self.assertEqual([item["role"] for item in persisted.results], ["Lead", "Architect", "Coder"])
+
+            resumed_provider = MockProvider()
+            decisions = iter([
+                (HumanDecision.APPROVE, ""),
+                (HumanDecision.APPROVE, ""),
+            ])
+            result = DevRoomOrchestrator(resumed_provider, state_writer=writer).run(
+                "Resume this workflow",
+                workspace=r"D:\\DEV_ROOM_TEST",
+                allowed_paths=("Assets/Test.cs",),
+                human_gate=lambda stage, prompt, context: next(decisions),
+                max_feedback_cycles=2,
+                resume_state=persisted,
+            )
+
+            self.assertEqual(result.stage, Stage.COMPLETE)
+            self.assertEqual([task.role for task in resumed_provider.calls], ["Implementer", "QA"])
+            self.assertEqual(
+                [stage.value for stage in result.history],
+                ["lead", "architect", "coder", "human_review", "implementer", "qa", "unity_validation", "complete"],
+            )
+
     def test_agent_failure_persists_halt_and_releases_guard(self) -> None:
         class FailingProvider(MockProvider):
             def execute(self, task):
