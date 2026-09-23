@@ -87,6 +87,7 @@ class WorkflowStateStoreTests(unittest.TestCase):
             state = JsonWorkflowStateStore(path).load("legacy")
             self.assertEqual(state.max_feedback_cycles, 3)
             self.assertEqual(state.allowed_paths, ())
+            self.assertIsNone(state.in_flight_role)
 
 
 if __name__ == "__main__":
