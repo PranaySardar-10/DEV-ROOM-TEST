@@ -86,6 +86,21 @@ class ProviderRouterTests(unittest.TestCase):
                 )
             )
 
+    def test_default_production_roles_have_distinct_contracts(self) -> None:
+        from devroom.provider_router import DEFAULT_ROLE_BINDINGS
+
+        for role in ("Lead", "Architect", "Coder", "Implementer", "QA"):
+            instructions = DEFAULT_ROLE_BINDINGS[role].instructions
+            self.assertIn("Do not expose chain-of-thought", instructions)
+            self.assertIn("UNVERIFIED", instructions)
+            self.assertIn("ROLE CONTRACT", instructions)
+
+        self.assertIn("Do not design the implementation", DEFAULT_ROLE_BINDINGS["Lead"].instructions)
+        self.assertIn("Do not write code", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("reviewable implementation proposal", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("human-approved proposal", DEFAULT_ROLE_BINDINGS["Implementer"].instructions)
+        self.assertIn("untrusted claims", DEFAULT_ROLE_BINDINGS["QA"].instructions)
+
     def test_missing_role_binding_fails_loudly(self) -> None:
         with self.assertRaises(KeyError):
             ProviderRouter({}, {}).execute(AgentTask(role="Unknown", goal="Do something"))
