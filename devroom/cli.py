@@ -52,6 +52,11 @@ def _parse_args() -> argparse.Namespace:
         help="Optional workflow ID; generated automatically when omitted.",
     )
     parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the durable workflow identified by --workflow-id.",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Validate configuration and provider availability, then exit.",
