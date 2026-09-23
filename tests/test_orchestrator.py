@@ -237,6 +237,33 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                     resume_state=persisted,
                 )
 
+    def test_resume_rejects_checkpoint_with_mismatched_results(self) -> None:
+        from devroom.state_store import PersistedWorkflow
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "workflow.json"
+            store = JsonWorkflowStateStore(path)
+            store.save(PersistedWorkflow(
+                workflow_id="bad-checkpoint",
+                stage=Stage.HUMAN_REVIEW.value,
+                history=("lead", "architect", "coder", "human_review"),
+                results=(
+                    {"role": "Lead", "summary": "ok", "artifacts": []},
+                    {"role": "Coder", "summary": "wrong order", "artifacts": []},
+                    {"role": "Architect", "summary": "wrong order", "artifacts": []},
+                ),
+                goal="Bad checkpoint",
+            ))
+            persisted = store.load("bad-checkpoint")
+            with self.assertRaisesRegex(ValueError, "results do not match"):
+                DevRoomOrchestrator(MockProvider()).run(
+                    "Bad checkpoint",
+                    workspace=None,
+                    allowed_paths=(),
+                    human_gate=self.approve_all,
+                    resume_state=persisted,
+                )
+
     def test_agent_failure_persists_halt_and_releases_guard(self) -> None:
         class FailingProvider(MockProvider):
             def execute(self, task):
