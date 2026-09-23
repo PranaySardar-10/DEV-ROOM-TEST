@@ -14,6 +14,10 @@ class CommandResult:
     stderr: str
 
 
+class WorkspacePreflightError(RuntimeError):
+    """Raised when workspace validation fails before any implementation write."""
+
+
 class LocalWorkspaceProvider:
     """Small, provider-neutral bridge for controlled local workspace operations."""
 
@@ -121,13 +125,13 @@ class LocalWorkspaceProvider:
             approved_executables=("git",),
         )
         if branch.returncode != 0 or not branch.stdout.strip():
-            raise PermissionError("Implementer workspace must be on a named Git branch.")
+            raise WorkspacePreflightError("Implementer workspace must be on a named Git branch.")
 
         name = branch.stdout.strip()
         if name in {"main", "master"}:
             raise PermissionError(f"Implementer cannot modify protected branch {name!r}.")
         if not name.startswith("agent/implementer/"):
-            raise PermissionError(
+            raise WorkspacePreflightError(
                 "Implementer workspace must use an agent/implementer/<task-id> branch."
             )
         return name
@@ -164,4 +168,4 @@ class LocalWorkspaceProvider:
         return resolved
 
 
-__all__ = ["CommandResult", "LocalWorkspaceProvider"]
+__all__ = ["CommandResult", "LocalWorkspaceProvider", "WorkspacePreflightError"]
