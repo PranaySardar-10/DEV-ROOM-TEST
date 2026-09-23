@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
+from uuid import uuid4
+
 
 from .bootstrap import build_from_config
 from .config import load_config
 from .orchestrator import HumanDecision, Stage
+from .state_store import JsonWorkflowStateStore, WorkflowStateWriter
 from .provider_health import require_available_providers
 
 
@@ -38,6 +42,16 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--max-feedback-cycles", type=int, default=3)
     parser.add_argument(
+        "--state-dir",
+        default=".devroom/state",
+        help="Directory for durable workflow state snapshots.",
+    )
+    parser.add_argument(
+        "--workflow-id",
+        default=None,
+        help="Optional workflow ID; generated automatically when omitted.",
+    )
+    parser.add_argument(
         "--check",
         action="store_true",
         help="Validate configuration and provider availability, then exit.",
@@ -59,7 +73,10 @@ def main() -> int:
         if args.check:
             print("DevRoom startup checks passed.")
             return 0
-        orchestrator = build_from_config(config)
+        workflow_id = args.workflow_id or uuid4().hex
+        state_path = Path(args.state_dir) / f"{workflow_id}.json"
+        state_writer = WorkflowStateWriter(JsonWorkflowStateStore(state_path), workflow_id)
+        orchestrator = build_from_config(config, state_writer=state_writer)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"DevRoom startup failed: {exc}", file=sys.stderr)
         return 2
