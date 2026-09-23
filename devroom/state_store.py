@@ -88,6 +88,10 @@ class WorkflowStateWriter:
         halted_reason: str | None = None,
         last_decision: str | None = None,
         last_feedback: str | None = None,
+        goal: str | None = None,
+        workspace: str | None = None,
+        allowed_paths: Iterable[str] = (),
+        max_feedback_cycles: int = 3,
     ) -> None:
         self.store.save(
             PersistedWorkflow(
@@ -98,6 +102,10 @@ class WorkflowStateWriter:
                 halted_reason=halted_reason,
                 last_decision=last_decision,
                 last_feedback=last_feedback,
+                goal=goal,
+                workspace=workspace,
+                allowed_paths=tuple(allowed_paths),
+                max_feedback_cycles=max_feedback_cycles,
             )
         )
 
