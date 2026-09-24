@@ -120,7 +120,7 @@ Do not report completion early.
         ])
         result = DevRoomOrchestrator(provider).run(
             "Implement vehicle ownership",
-            human_gate=gate,
+            human_gate=lambda stage, prompt, context: next(decisions),
         )
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
@@ -306,8 +306,7 @@ Do not report completion early.
         self.assertEqual(result.stage, Stage.HALTED)
         self.assertIn(Stage.HUMAN_REVIEW, result.history)
         self.assertNotIn(Stage.IMPLEMENTER, result.history)
-        self.assertIn("Coder proposal is incomplete", result.halted_reason or "")
-        self.assertIn("VERIFICATION PLAN", result.halted_reason or "")
+        self.assertEqual(result.halted_reason, "Stop until the Coder contract is fixed.")
         self.assertEqual([task.role for task in provider.calls], ["Lead", "Architect", "Coder"])
 
     def test_empty_coder_halts_before_review(self) -> None:
