@@ -55,6 +55,29 @@ class AgentProvider(Protocol):
 HumanGate = Callable[[Stage, str, Mapping[str, str]], tuple[HumanDecision, str]]
 
 
+_CODER_PROPOSAL_REQUIREMENTS = (
+    "IMPLEMENTATION FILES/DIRECTORIES",
+    "CONCRETE CHANGES",
+    "DEPENDENCIES AND CONSTRAINTS",
+    "VERIFICATION PLAN",
+    "COMPLETENESS CHECK",
+)
+
+
+def validate_coder_proposal(summary: str) -> str | None:
+    """Return a deterministic completeness error for proposals missing required sections."""
+    normalized = summary.upper()
+    missing = [section for section in _CODER_PROPOSAL_REQUIREMENTS if section not in normalized]
+    if missing:
+        return (
+            "Coder proposal is incomplete before human review; missing required sections: "
+            + ", ".join(missing)
+            + ". The Coder must make the proposal implementation-ready without leaving design decisions "
+              "for the Implementer."
+        )
+    return None
+
+
 class MockProvider:
     """Deterministic provider used to validate orchestration without an AI model."""
 
@@ -432,6 +455,10 @@ class DevRoomOrchestrator:
                 reason = "Coder completed without producing a reviewable implementation proposal."
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
+            proposal_error = validate_coder_proposal(proposal.summary)
+            if proposal_error is not None:
+                persist(Stage.HALTED, proposal_error)
+                return WorkflowResult(Stage.HALTED, history, results, proposal_error)
 
             decision, feedback = gate(
                 Stage.HUMAN_REVIEW,
