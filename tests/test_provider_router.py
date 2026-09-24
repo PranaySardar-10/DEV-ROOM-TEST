@@ -108,7 +108,7 @@ class ProviderRouterTests(unittest.TestCase):
         self.assertIn("REQUIREMENT COVERAGE CHECK", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
         self.assertIn("exact path, purpose, required contents/structure", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
         self.assertIn("Do not leave implementation decisions for the Coder or Implementer to invent", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
-        self.assertIn("concrete changes", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("CONCRETE CHANGES", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
         self.assertIn("VERIFICATION PLAN", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
         self.assertIn("COMPLETENESS CHECK", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
         self.assertIn("identify the gap explicitly", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
