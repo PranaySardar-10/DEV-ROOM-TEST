@@ -42,6 +42,7 @@ class LocalOllamaWorkspaceAgent:
     stall_timeout_seconds: int = 1800
     timeout_seconds: int = 600
     api_url: str = "http://localhost:11434/api/generate"
+    num_predict: int = 4096
 
     def execute_in_workspace(
         self,
@@ -50,6 +51,8 @@ class LocalOllamaWorkspaceAgent:
     ) -> AgentResult:
         if self.stall_timeout_seconds <= 0:
             raise ValueError("stall_timeout_seconds must be > 0.")
+        if self.num_predict <= 0:
+            raise ValueError("num_predict must be > 0.")
         if task.role != "Implementer":
             raise PermissionError("LocalOllamaWorkspaceAgent is restricted to Implementer.")
         if task.context.get("sandbox") != WORKSPACE_WRITE:
@@ -133,7 +136,7 @@ class LocalOllamaWorkspaceAgent:
                 "prompt": prompt,
                 "stream": False,
                 "format": ARTIFACT_SCHEMA,
-                "options": {"temperature": 0},
+                "options": {"temperature": 0, "num_predict": self.num_predict},
             }
         ).encode("utf-8")
         request = urllib.request.Request(
