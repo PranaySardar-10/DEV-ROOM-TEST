@@ -260,7 +260,7 @@ Do not report completion early.
             return next(decisions)
         result = DevRoomOrchestrator(provider).run(
             "Create the foundation",
-            human_gate=lambda stage, prompt, context: next(decisions),
+            human_gate=gate,
         )
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
