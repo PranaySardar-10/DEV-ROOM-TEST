@@ -662,3 +662,39 @@ After the Lead→Architect isolation fix, the full deterministic test suite was 
 - ResourceWarning messages for temporary HTTP 401/400/409 cleanup appeared but did not fail the suite.
 
 This is the first clean deterministic validation of the new contamination fix. The next step is one controlled real Gemma GAME-FOUNDATION-001 production run. Do not modify the architecture or add prompt complexity before observing that run.
+
+
+## 24. 2026-09-24 — GEMMA OUTPUT TRUNCATION DIAGNOSIS AND GENERATION-BUDGET FIX
+
+The controlled real GAME-FOUNDATION-001 production validation was run after the 127/127 deterministic suite.
+
+Observed behavior:
+- The Lead→Architect contamination fix is working: Architect no longer produced a Lead identity, QA report, fake PASS results, or exposed thinking process.
+- However, the Architect output itself repeatedly stopped very early, before completing the implementation specification.
+- The Coder then also stopped extremely early, often immediately after headings such as `**Directory Structure Creation:**`.
+- The final run was correctly halted at the human-review gate without entering implementation.
+- The task specification was inspected and is not unusually large; the non-QA role-filtering removes the downstream QA/Human Unity/Completion sections.
+- The local Ollama provider was inspected and was not explicitly setting an output-token budget. This makes an implicit/default model generation limit a concrete suspect for the repeated short completions. The pattern is consistent with a generation-budget ceiling rather than the earlier role-contamination failure.
+
+Concrete fix applied on `devroom/stall-timeout-role-contracts`:
+- `LocalOllamaConfig` now has `num_predict: int = 4096`.
+- The Ollama API payload now explicitly sends:
+  `"options": {"num_predict": self.config.num_predict}`
+- Invalid non-positive generation budgets are rejected.
+- Added deterministic tests in `tests/test_local_ollama_generation_budget.py` covering:
+  - default 4096 generation budget is serialized into the Ollama request;
+  - custom generation budget is serialized correctly;
+  - invalid generation budget is rejected.
+
+Commits:
+- `f4537e896928f5f4879b8c3166e2753f37287200` — fix: set explicit local Ollama generation budget
+- `637134ac1e49471d2ed9b03508807b9e8e067326` — test: cover explicit Ollama generation budget
+
+Current development branch head after these commits:
+`637134ac1e49471d2ed9b03508807b9e8e067326`
+
+Important:
+- These new commits have been created remotely but have NOT yet been executed in the user's local checkout in this conversation.
+- Do not claim the deterministic suite is still 127/127 after these changes until the user pulls and runs it.
+- Do not run another expensive Gemma production task until the new deterministic tests pass.
+- If the suite passes, rerun one controlled GAME-FOUNDATION-001 production validation and inspect the complete Architect/Coder outputs.
