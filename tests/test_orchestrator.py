@@ -61,6 +61,15 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                 for task in provider.calls)
         )
 
+    def test_architect_isolated_from_raw_lead_output(self) -> None:
+        provider = MockProvider()
+        result = DevRoomOrchestrator(provider).run("Build foundation")
+        self.assertEqual(result.stage, Stage.HALTED)
+        architect = provider.calls[1]
+        self.assertEqual(architect.role, "Architect")
+        self.assertNotIn("lead_summary", architect.context)
+        self.assertNotIn("Mock Lead completed", architect.context.values())
+
     def test_task_specification_is_role_filtered_and_full_spec_is_persisted(self) -> None:
         provider = MockProvider()
         specification = """# Objective
