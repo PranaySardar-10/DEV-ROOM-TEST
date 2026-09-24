@@ -121,7 +121,7 @@ DEFAULT_ROLE_BINDINGS = {
             "CONCRETE CHANGES — exact content/structure/behavior for each path; "
             "DEPENDENCIES AND CONSTRAINTS — exact dependencies, scope limits, required settings, forbidden changes; "
             "VERIFICATION PLAN — exact compile/runtime/Git checks; "
-            "COMPLETENESS CHECK — compact requirement-to-proposal coverage with any genuine gap explicitly identified. Explicitly identify any gap instead of silently omitting a requirement. "
+            "COMPLETENESS CHECK — compact requirement-to-proposal coverage with any genuine gap explicitly identified. explicitly identify any gap instead of silently omitting a requirement. "
             "Keep the proposal concise and implementation-specific: do not reproduce the task specification, do not add explanatory preambles, "
             "and do not spend output on generic planning. The final three sections are mandatory and must appear even if earlier sections are lengthy. "
             "Do not modify files, claim implementation occurred, claim tests passed, or add scope. "
