@@ -40,6 +40,7 @@ class LocalOllamaProvider(AgentProvider):
 
     def execute(self, task: AgentTask) -> AgentResult:
         prompt = self._build_prompt(task)
+        effective_num_predict = self._effective_num_predict(task)
         payload = json.dumps(
             {
                 "model": self.config.model,
@@ -49,7 +50,7 @@ class LocalOllamaProvider(AgentProvider):
                 ],
                 "stream": True,
                 "think": False,
-                "options": {"num_predict": self.config.num_predict},
+                "options": {"num_predict": effective_num_predict},
             }
         ).encode("utf-8")
         try:
@@ -99,6 +100,18 @@ class LocalOllamaProvider(AgentProvider):
             )
         artifacts = ("implementation-proposal",) if task.role == "Coder" else ()
         return AgentResult(role=task.role, summary=summary, artifacts=artifacts)
+
+    def _effective_num_predict(self, task: AgentTask) -> int:
+        override = task.context.get("generation_num_predict")
+        if override is None:
+            return self.config.num_predict
+        try:
+            value = int(override)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("generation_num_predict must be an integer.") from exc
+        if value <= 0:
+            raise ValueError("generation_num_predict must be > 0.")
+        return value
 
     @staticmethod
     def _build_prompt(task: AgentTask) -> str:
