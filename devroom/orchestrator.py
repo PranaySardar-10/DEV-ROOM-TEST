@@ -520,11 +520,7 @@ class DevRoomOrchestrator:
 
             decision, feedback = gate(
                 Stage.HUMAN_REVIEW,
-                (
-                    "Review the proposed implementation with ChatGPT and decide whether it may enter "
-                    "the implementation stage: "
-                    f"{goal}"
-                ),
+                f"Review the proposed implementation with ChatGPT and decide whether it may enter the implementation stage: {goal}",
                 review_context,
             )
 
@@ -533,112 +529,103 @@ class DevRoomOrchestrator:
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
 
-            if decision is HumanDecision.APPROVE:
-                if proposal_error is not None:
+            if decision is HumanDecision.REQUEST_CHANGES:
+                if cycle >= max_feedback_cycles:
+                    reason = "Maximum proposal revision cycles reached."
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+
+                target, targeted_feedback = revision_target(feedback)
+                revision_feedback = targeted_feedback or (
+                    "Revise the proposal according to human/ChatGPT review."
+                )
+
+                if target == "Architect":
+                    architecture = call(
+                        Stage.ARCHITECT,
+                        "Architect",
+                        f"Revise the implementation specification for: {goal}",
+                        {
+                            "previous_architecture_summary": architecture.summary,
+                            "revision_instruction": revision_feedback,
+                        },
+                    )
+                    revision_feedback = ""
+                elif target != "Coder":
                     reason = (
-                        "An incomplete Coder proposal cannot be approved for implementation. "
-                        "Provide a targeted correction or halt."
+                        f"Human review targeted {target}, but only Architect or Coder can be "
+                        "revised before implementation."
                     )
                     persist(Stage.HALTED, reason)
                     return WorkflowResult(Stage.HALTED, history, results, reason)
-                break
 
-            if cycle >= max_feedback_cycles:
-                reason = "Maximum proposal revision cycles reached."
+                cycle += 1
+                continue
+
+            if proposal_error is not None:
+                reason = (
+                    "An incomplete Coder proposal cannot be approved for implementation. "
+                    "Provide a targeted correction or halt."
+                )
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
 
-            target, targeted_feedback = revision_target(feedback)
-            revision_feedback = targeted_feedback or (
-                "Revise the proposal according to human/ChatGPT review."
+            implementation = call(
+                Stage.IMPLEMENTER,
+                "Implementer",
+                f"Integrate the approved implementation for: {goal}",
+                {
+                    "architecture_summary": architecture.summary,
+                    "approved_proposal": proposal.summary,
+                    "approval_feedback": feedback,
+                },
+            )
+            if not implementation.artifacts:
+                reason = "Implementer completed without producing integration artifacts."
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
+
+            qa_context = {
+                "implementation_summary": implementation.summary,
+                "approved_proposal": proposal.summary,
+            }
+            qa_context.update(collect_qa_evidence())
+            qa = call(
+                Stage.QA,
+                "QA",
+                f"Run automated validation for the integrated implementation: {goal}",
+                qa_context,
             )
 
-            if target == "Architect":
-                architecture = call(
-                    Stage.ARCHITECT,
-                    "Architect",
-                    f"Revise the implementation specification for: {goal}",
-                    {
-                        "previous_architecture_summary": architecture.summary,
-                        "revision_instruction": revision_feedback,
-                    },
-                )
-                revision_feedback = ""
-            elif target != "Coder":
-                reason = (
-                    f"Human review targeted {target}, but only Architect or Coder can be "
-                    "revised before implementation."
-                )
+            validation_decision, validation_feedback = gate(
+                Stage.UNITY_VALIDATION,
+                f"Open the Unity project and validate the actual gameplay/runtime result for: {goal}",
+                {
+                    "implementation": implementation.summary,
+                    "qa": qa.summary,
+                },
+            )
+
+            if validation_decision is HumanDecision.APPROVE:
+                history.append(Stage.COMPLETE)
+                persist(Stage.COMPLETE)
+                return WorkflowResult(Stage.COMPLETE, history, results)
+
+            if validation_decision is HumanDecision.HALT:
+                reason = validation_feedback or "Unity validation halted the workflow."
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
 
+            if cycle >= max_feedback_cycles:
+                reason = "Maximum Unity correction cycles reached."
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
+
+            revision_feedback = (
+                validation_feedback
+                or "Unity validation found a problem. Produce a corrected implementation proposal."
+            )
             cycle += 1
-
-        if proposal is None:
-            reason = "Workflow ended without a Coder proposal."
-            persist(Stage.HALTED, reason)
-            return WorkflowResult(Stage.HALTED, history, results, reason)
-
-        implementation = call(
-            Stage.IMPLEMENTER,
-            "Implementer",
-            f"Integrate the approved implementation for: {goal}",
-            {
-                "architecture_summary": architecture.summary,
-                "approved_proposal": proposal.summary,
-                "approval_feedback": feedback,
-            },
-        )
-        if not implementation.artifacts:
-            reason = "Implementer completed without producing integration artifacts."
-            persist(Stage.HALTED, reason)
-            return WorkflowResult(Stage.HALTED, history, results, reason)
-
-        qa_context = {
-            "implementation_summary": implementation.summary,
-            "approved_proposal": proposal.summary,
-        }
-        qa_context.update(collect_qa_evidence())
-        qa = call(
-            Stage.QA,
-            "QA",
-            f"Run automated validation for the integrated implementation: {goal}",
-            qa_context,
-        )
-
-        validation_decision, validation_feedback = gate(
-            Stage.UNITY_VALIDATION,
-            f"Open the Unity project and validate the actual gameplay/runtime result for: {goal}",
-            {
-                "implementation": implementation.summary,
-                "qa": qa.summary,
-            },
-        )
-
-        if validation_decision is HumanDecision.APPROVE:
-            history.append(Stage.COMPLETE)
-            persist(Stage.COMPLETE)
-            return WorkflowResult(Stage.COMPLETE, history, results)
-
-        if validation_decision is HumanDecision.HALT:
-            reason = validation_feedback or "Unity validation halted the workflow."
-            persist(Stage.HALTED, reason)
-            return WorkflowResult(Stage.HALTED, history, results, reason)
-
-        if cycle >= max_feedback_cycles:
-            reason = "Maximum Unity correction cycles reached."
-            persist(Stage.HALTED, reason)
-            return WorkflowResult(Stage.HALTED, history, results, reason)
-
-        revision_feedback = (
-            validation_feedback
-            or "Unity validation found a problem. Produce a corrected implementation proposal."
-        )
-        cycle += 1
-
-        reason = "Workflow ended without approval."
-        persist(Stage.HALTED, reason)
-        return WorkflowResult(Stage.HALTED, history, results, reason)
 
         reason = "Workflow ended without approval."
         persist(Stage.HALTED, reason)
