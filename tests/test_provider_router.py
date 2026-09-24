@@ -111,7 +111,7 @@ class ProviderRouterTests(unittest.TestCase):
         self.assertIn("CONCRETE CHANGES", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
         self.assertIn("VERIFICATION PLAN", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
         self.assertIn("COMPLETENESS CHECK", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
-        self.assertIn("identify the gap explicitly", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("explicitly identify any gap", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
 
     def test_role_contract_boundary_is_present(self) -> None:
         worker = RecordingProvider()
