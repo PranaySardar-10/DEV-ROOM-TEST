@@ -213,7 +213,54 @@ Do not report completion early.
             )
         )
 
-    def test_incomplete_coder_proposal_halts_before_human_review(self) -> None:
+    def test_incomplete_coder_proposal_is_automatically_retried(self) -> None:
+        class RecoveringCoder(MockProvider):
+            def __init__(self):
+                super().__init__()
+                self.coder_calls = 0
+
+            def execute(self, task):
+                self.calls.append(task)
+                if task.role == "Coder":
+                    self.coder_calls += 1
+                    if self.coder_calls == 1:
+                        return AgentResult(
+                            role="Coder",
+                            summary=(
+                                "IMPLEMENTATION FILES/DIRECTORIES\n"
+                                "Assets/Omniversel/Tests\n"
+                                "CONCRETE CHANGES\n"
+                                "Create files."
+                            ),
+                            artifacts=("proposal-incomplete.txt",),
+                        )
+                    return AgentResult(
+                        role="Coder",
+                        summary=(
+                            "IMPLEMENTATION FILES/DIRECTORIES\npaths\n"
+                            "CONCRETE CHANGES\nchanges\n"
+                            "DEPENDENCIES AND CONSTRAINTS\nconstraints\n"
+                            "VERIFICATION PLAN\nverification\n"
+                            "COMPLETENESS CHECK\ncomplete"
+                        ),
+                        artifacts=("proposal-complete.txt",),
+                    )
+                return super().execute(task)
+
+        provider = RecoveringCoder()
+        result = DevRoomOrchestrator(provider).run(
+            "Create the foundation",
+            human_gate=self.approve_all,
+        )
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            [task.role for task in provider.calls],
+            ["Lead", "Architect", "Coder", "Coder", "Implementer", "QA"],
+        )
+        self.assertIn("revision_instruction", provider.calls[3].context)
+        self.assertIn("DEPENDENCIES AND CONSTRAINTS", provider.calls[3].context["revision_instruction"])
+
+    def test_incomplete_coder_proposal_halts_after_feedback_limit(self) -> None:
         class IncompleteCoder(MockProvider):
             def execute(self, task):
                 self.calls.append(task)
@@ -234,12 +281,14 @@ Do not report completion early.
         result = DevRoomOrchestrator(provider).run(
             "Create the foundation",
             human_gate=self.approve_all,
+            max_feedback_cycles=2,
         )
         self.assertEqual(result.stage, Stage.HALTED)
         self.assertNotIn(Stage.HUMAN_REVIEW, result.history)
         self.assertNotIn(Stage.IMPLEMENTER, result.history)
         self.assertIn("Coder proposal is incomplete", result.halted_reason or "")
         self.assertIn("VERIFICATION PLAN", result.halted_reason or "")
+        self.assertEqual([task.role for task in provider.calls], ["Lead", "Architect", "Coder", "Coder", "Coder"])
 
     def test_empty_coder_halts_before_review(self) -> None:
         class EmptyCoder(MockProvider):
