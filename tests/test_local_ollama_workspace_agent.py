@@ -50,6 +50,40 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
         agent = LocalOllamaWorkspaceAgent(model="gemma4:e4b", stall_timeout_seconds=1800)
         self.assertEqual(agent.stall_timeout_seconds, 1800)
 
+    def test_default_generation_budget_is_explicitly_sent(self):
+        with patch("devroom.local_ollama_workspace_agent.urllib.request.urlopen") as urlopen:
+            response = MagicMock()
+            response.read.return_value = json.dumps(
+                {
+                    "model": "gemma4:e4b",
+                    "response": json.dumps({"summary": "ok", "files": [{"path": "smoke_test.txt", "content": "ok"}]}),
+                    "done": True,
+                }
+            ).encode("utf-8")
+            urlopen.return_value.__enter__.return_value = response
+            LocalOllamaWorkspaceAgent(model="gemma4:e4b")._generate_structured("test")
+            body = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
+            self.assertEqual(body["options"]["num_predict"], 4096)
+
+    def test_custom_generation_budget_is_sent(self):
+        with patch("devroom.local_ollama_workspace_agent.urllib.request.urlopen") as urlopen:
+            response = MagicMock()
+            response.read.return_value = json.dumps(
+                {
+                    "model": "gemma4:e4b",
+                    "response": json.dumps({"summary": "ok", "files": [{"path": "smoke_test.txt", "content": "ok"}]}),
+                    "done": True,
+                }
+            ).encode("utf-8")
+            urlopen.return_value.__enter__.return_value = response
+            LocalOllamaWorkspaceAgent(model="gemma4:e4b", num_predict=8192)._generate_structured("test")
+            body = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
+            self.assertEqual(body["options"]["num_predict"], 8192)
+
+    def test_invalid_generation_budget_is_rejected(self):
+        with self.assertRaises(ValueError):
+            LocalOllamaWorkspaceAgent(model="gemma4:e4b", num_predict=0)
+
     def test_scope_is_explicit(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace = LocalWorkspaceProvider(directory)
