@@ -18,19 +18,7 @@ def _human_gate(stage: Stage, prompt: str, context: dict[str, str]):
     print(prompt)
     for key, value in context.items():
         print(f"\n{key}:\n{value}")
-    incomplete_coder = context.get("decision_options", "").startswith("Provide a corrective prompt")
     while True:
-        if incomplete_coder:
-            choice = input("\nDecision [prompt/halt]: ").strip().lower()
-            if choice == "prompt":
-                feedback = input("Corrective prompt for Coder: ").strip()
-                if feedback:
-                    return HumanDecision.REQUEST_CHANGES, feedback
-            elif choice == "halt":
-                return HumanDecision.HALT, ""
-            print("Enter prompt or halt.")
-            continue
-
         choice = input("\nDecision [approve/request_changes/halt]: ").strip().lower()
         if choice in {"approve", "halt"}:
             return HumanDecision(choice), ""
