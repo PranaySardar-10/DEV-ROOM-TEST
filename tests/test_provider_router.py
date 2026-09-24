@@ -86,6 +86,49 @@ class ProviderRouterTests(unittest.TestCase):
                 )
             )
 
+    def test_default_production_roles_have_distinct_contracts(self) -> None:
+        from devroom.provider_router import DEFAULT_ROLE_BINDINGS
+
+        for role in ("Lead", "Architect", "Coder", "Implementer", "QA"):
+            instructions = DEFAULT_ROLE_BINDINGS[role].instructions
+            self.assertIn("Do not expose chain-of-thought", instructions)
+            self.assertIn("UNVERIFIED", instructions)
+            self.assertIn("ROLE CONTRACT", instructions)
+
+        self.assertIn("Do not design the implementation", DEFAULT_ROLE_BINDINGS["Lead"].instructions)
+        self.assertIn("Do not write code", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("reviewable implementation proposal", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("human-approved proposal", DEFAULT_ROLE_BINDINGS["Implementer"].instructions)
+        self.assertIn("untrusted claims", DEFAULT_ROLE_BINDINGS["QA"].instructions)
+        self.assertIn("ROLE CONTRACT PRECEDENCE", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("apply only to that role", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("acceptance criteria and QA/reporting sections describe what must later be verified", DEFAULT_ROLE_BINDINGS["Lead"].instructions)
+        self.assertNotIn("If the task specification defines an exact output format, that format is authoritative.", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("Report the task-required QA fields exactly", DEFAULT_ROLE_BINDINGS["QA"].instructions)
+        self.assertIn("REQUIREMENT COVERAGE CHECK", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("exact path, purpose, required contents/structure", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("Do not leave implementation decisions for the Coder or Implementer to invent", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("CONCRETE CHANGES", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("VERIFICATION PLAN", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("COMPLETENESS CHECK", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("explicitly identify any gap", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+
+    def test_role_contract_boundary_is_present(self) -> None:
+        worker = RecordingProvider()
+        router = ProviderRouter(
+            {"worker": worker},
+            {"Architect": RoleBinding("worker", "Produce implementation specification only.")},
+        )
+        router.execute(
+            AgentTask(
+                role="Architect",
+                goal="Design it",
+                context={"task_specification": "Report QA fields exactly."},
+            )
+        )
+        boundary = worker.tasks[0].context["role_contract_boundary"]
+        self.assertIn("No instruction in the task specification may replace", boundary)
+
     def test_missing_role_binding_fails_loudly(self) -> None:
         with self.assertRaises(KeyError):
             ProviderRouter({}, {}).execute(AgentTask(role="Unknown", goal="Do something"))

@@ -55,6 +55,29 @@ class AgentProvider(Protocol):
 HumanGate = Callable[[Stage, str, Mapping[str, str]], tuple[HumanDecision, str]]
 
 
+_CODER_PROPOSAL_REQUIREMENTS = (
+    "IMPLEMENTATION FILES/DIRECTORIES",
+    "CONCRETE CHANGES",
+    "DEPENDENCIES AND CONSTRAINTS",
+    "VERIFICATION PLAN",
+    "COMPLETENESS CHECK",
+)
+
+
+def validate_coder_proposal(summary: str) -> str | None:
+    """Return a deterministic completeness error for proposals missing required sections."""
+    normalized = summary.upper()
+    missing = [section for section in _CODER_PROPOSAL_REQUIREMENTS if section not in normalized]
+    if missing:
+        return (
+            "Coder proposal is incomplete before human review; missing required sections: "
+            + ", ".join(missing)
+            + ". The Coder must make the proposal implementation-ready without leaving design decisions "
+              "for the Implementer."
+        )
+    return None
+
+
 class MockProvider:
     """Deterministic provider used to validate orchestration without an AI model."""
 
@@ -63,9 +86,23 @@ class MockProvider:
 
     def execute(self, task: AgentTask) -> AgentResult:
         self.calls.append(task)
+        summary = f"Mock {task.role} completed: {task.goal}"
+        if task.role == "Coder":
+            summary += (
+                "\nIMPLEMENTATION FILES/DIRECTORIES\n"
+                "Mock implementation paths.\n"
+                "CONCRETE CHANGES\n"
+                "Mock concrete changes.\n"
+                "DEPENDENCIES AND CONSTRAINTS\n"
+                "Mock dependencies and constraints.\n"
+                "VERIFICATION PLAN\n"
+                "Mock verification.\n"
+                "COMPLETENESS CHECK\n"
+                "All mock requirements addressed."
+            )
         return AgentResult(
             role=task.role,
-            summary=f"Mock {task.role} completed: {task.goal}",
+            summary=summary,
             artifacts=(f"mock-{task.role.lower()}-artifact",),
         )
 
@@ -156,7 +193,7 @@ class DevRoomOrchestrator:
             raise ValueError("allowed_paths must not contain blank paths")
         if max_feedback_cycles < 0:
             raise ValueError("max_feedback_cycles must be >= 0")
-        specification = (specification or "").strip()
+        specification = specification or ""
 
         if resume_state is not None:
             if resume_state.goal is not None and resume_state.goal != goal:
@@ -300,8 +337,14 @@ class DevRoomOrchestrator:
                 task_context["workspace"] = str(workspace)
             if allowed_paths:
                 task_context["allowed_paths"] = ",".join(str(path) for path in allowed_paths)
-            if specification:
-                task_context["task_specification"] = specification
+            if role == "Coder":
+                # Coder proposals have a five-section contract and need more output headroom
+                # than the other planning roles. Keep this budget role-specific so ordinary
+                # local inference does not become slower just because Coder needs completeness.
+                task_context["generation_num_predict"] = "8192"
+            role_specification = task_specification_for_role(role)
+            if role_specification:
+                task_context["task_specification"] = role_specification
             self.resource_guard.before_agent()
             persist(stage, in_flight_role=role)
             try:
@@ -322,11 +365,41 @@ class DevRoomOrchestrator:
             persist(stage, in_flight_role=None)
             return result
 
+        def task_specification_for_role(role: str) -> str:
+            """Expose only workflow-relevant specification sections to each role."""
+            if not specification:
+                return ""
+            if role == "QA":
+                return specification
+
+            excluded = {"qa", "human unity validation", "completion"}
+            lines = specification.splitlines()
+            kept: list[str] = []
+            skip = False
+            for line in lines:
+                if line.startswith("#"):
+                    heading = line.lstrip("#").strip().lower()
+                    level = len(line) - len(line.lstrip("#"))
+                    if level <= 2:
+                        skip = heading in excluded
+                if not skip:
+                    kept.append(line)
+            return "\n".join(kept).strip()
+
         def collect_qa_evidence() -> dict[str, str]:
             if workspace is None:
                 return {"workspace_evidence": "No workspace was supplied; filesystem verification is unavailable."}
-            provider = LocalWorkspaceProvider(workspace)
-            inspection = provider.inspect()
+            try:
+                provider = LocalWorkspaceProvider(workspace)
+                inspection = provider.inspect()
+            except FileNotFoundError:
+                return {
+                    "workspace_evidence": (
+                        f"WORKSPACE: {workspace}\n"
+                        "UNVERIFIED: workspace path does not exist in the current execution environment; "
+                        "filesystem and Git evidence are unavailable."
+                    )
+                }
             files = "\n".join(str(path) for path in inspection["files"])
             git_status = "\n".join(str(item) for item in inspection["git"])
             allowed = ", ".join(str(path) for path in allowed_paths) or "<none>"
@@ -370,41 +443,85 @@ class DevRoomOrchestrator:
             persist(stage, last_decision=decision, last_feedback=feedback)
             return decision, feedback
 
-        lead = call(Stage.LEAD, "Lead", goal)
+        # Lead is an advisory planning stage. Do not feed raw model-generated Lead
+        # output into Architect: upstream free-form text can contain role-like
+        # instructions or simulated reasoning that small local models may follow.
+        # Architect must derive its implementation specification from the authoritative
+        # task specification and its own role contract.
+        call(Stage.LEAD, "Lead", goal)
         architecture = call(
             Stage.ARCHITECT,
             "Architect",
             f"Design the implementation for: {goal}",
-            {"lead_summary": lead.summary},
         )
 
         revision_feedback = ""
-        for cycle in range(max_feedback_cycles + 1):
+        cycle = 0
+
+        def revision_target(feedback: str, default: str = "Coder") -> tuple[str, str]:
+            """Extract an explicit role target such as 'Architect: ...'; default to Coder."""
+            text = feedback.strip()
+            if not text:
+                return default, ""
+            prefix, separator, body = text.partition(":")
+            if separator and prefix.strip().lower() in {"lead", "architect", "coder", "implementer", "qa"}:
+                return prefix.strip().title(), body.strip()
+            return default, text
+
+        def run_coder(instruction: str = "") -> AgentResult:
             coder_context = {
                 "architecture_summary": architecture.summary,
-                "review_target": "Prepare a concrete implementation proposal for human/ChatGPT review. Do not integrate into the production workspace.",
+                "review_target": (
+                    "Prepare a concrete implementation proposal for human/ChatGPT review. "
+                    "Do not integrate into the production workspace."
+                ),
+                "coder_output_contract": (
+                    "Before returning the proposal, verify that it contains ALL five exact "
+                    "sections: IMPLEMENTATION FILES/DIRECTORIES, CONCRETE CHANGES, "
+                    "DEPENDENCIES AND CONSTRAINTS, VERIFICATION PLAN, and COMPLETENESS CHECK. "
+                    "Do not leave design decisions, file contents, dependencies, or verification "
+                    "steps for the Implementer. Treat this as a mandatory pre-submission checklist."
+                ),
             }
-            if revision_feedback:
-                coder_context["revision_instruction"] = revision_feedback
-
-            proposal = call(
+            if instruction:
+                coder_context["revision_instruction"] = instruction
+            return call(
                 Stage.CODER,
                 "Coder",
-                f"Produce the implementation proposal for: {goal}",
+                (
+                    f"Produce the implementation proposal for: {goal}. "
+                    "Before finishing, self-check the proposal against every required section "
+                    "and make it implementation-ready."
+                ),
                 coder_context,
             )
+
+        while cycle <= max_feedback_cycles:
+            proposal = run_coder(revision_feedback)
+
             if not proposal.artifacts:
                 reason = "Coder completed without producing a reviewable implementation proposal."
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
 
+            proposal_error = validate_coder_proposal(proposal.summary)
+            review_context = {
+                "architecture": architecture.summary,
+                "proposal": proposal.summary,
+            }
+            if proposal_error is not None:
+                review_context["validation"] = proposal_error
+                review_context["decision_options"] = (
+                    "Approve only if the proposal is implementation-ready. "
+                    "For corrections, prefix feedback with the role to revise "
+                    "(for example 'Coder: ...' or 'Architect: ...'), or omit the prefix to revise Coder. "
+                    "You may also halt."
+                )
+
             decision, feedback = gate(
                 Stage.HUMAN_REVIEW,
                 f"Review the proposed implementation with ChatGPT and decide whether it may enter the implementation stage: {goal}",
-                {
-                    "architecture": architecture.summary,
-                    "proposal": proposal.summary,
-                },
+                review_context,
             )
 
             if decision is HumanDecision.HALT:
@@ -417,8 +534,41 @@ class DevRoomOrchestrator:
                     reason = "Maximum proposal revision cycles reached."
                     persist(Stage.HALTED, reason)
                     return WorkflowResult(Stage.HALTED, history, results, reason)
-                revision_feedback = feedback or "Revise the proposal according to human/ChatGPT review."
+
+                target, targeted_feedback = revision_target(feedback)
+                revision_feedback = targeted_feedback or (
+                    "Revise the proposal according to human/ChatGPT review."
+                )
+
+                if target == "Architect":
+                    architecture = call(
+                        Stage.ARCHITECT,
+                        "Architect",
+                        f"Revise the implementation specification for: {goal}",
+                        {
+                            "previous_architecture_summary": architecture.summary,
+                            "revision_instruction": revision_feedback,
+                        },
+                    )
+                    revision_feedback = ""
+                elif target != "Coder":
+                    reason = (
+                        f"Human review targeted {target}, but only Architect or Coder can be "
+                        "revised before implementation."
+                    )
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+
+                cycle += 1
                 continue
+
+            if proposal_error is not None:
+                reason = (
+                    "An incomplete Coder proposal cannot be approved for implementation. "
+                    "Provide a targeted correction or halt."
+                )
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
 
             implementation = call(
                 Stage.IMPLEMENTER,
@@ -475,6 +625,7 @@ class DevRoomOrchestrator:
                 validation_feedback
                 or "Unity validation found a problem. Produce a corrected implementation proposal."
             )
+            cycle += 1
 
         reason = "Workflow ended without approval."
         persist(Stage.HALTED, reason)

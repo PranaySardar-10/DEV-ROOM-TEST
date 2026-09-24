@@ -60,7 +60,9 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.providers[0].kind, "local-ollama")
             self.assertEqual(config.providers[1].kind, "local-ollama-workspace")
             self.assertEqual(config.providers[1].options["model"], "gemma4:e4b")
-            self.assertEqual(config.providers[2].options["model"], "qwen3.5:4b")
+            self.assertEqual(config.providers[0].options["stall_timeout_seconds"], 1800)
+            self.assertEqual(config.providers[1].options["stall_timeout_seconds"], 1800)
+            self.assertEqual(config.providers[2].options["stall_timeout_seconds"], 1800)
             providers_by_name = {provider.name: provider for provider in config.providers}
             self.assertEqual(
                 providers_by_name["qwen2.5-coder-3b-workspace-local"].options["model"],

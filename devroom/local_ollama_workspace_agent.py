@@ -39,8 +39,16 @@ class LocalOllamaWorkspaceAgent:
 
     command: str = "ollama"
     model: str = ""
+    stall_timeout_seconds: int = 1800
     timeout_seconds: int = 600
     api_url: str = "http://localhost:11434/api/generate"
+    num_predict: int = 4096
+
+    def __post_init__(self) -> None:
+        if self.stall_timeout_seconds <= 0:
+            raise ValueError("stall_timeout_seconds must be > 0.")
+        if self.num_predict <= 0:
+            raise ValueError("num_predict must be > 0.")
 
     def execute_in_workspace(
         self,
@@ -130,7 +138,7 @@ class LocalOllamaWorkspaceAgent:
                 "prompt": prompt,
                 "stream": False,
                 "format": ARTIFACT_SCHEMA,
-                "options": {"temperature": 0},
+                "options": {"temperature": 0, "num_predict": self.num_predict},
             }
         ).encode("utf-8")
         request = urllib.request.Request(
@@ -140,7 +148,7 @@ class LocalOllamaWorkspaceAgent:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with urllib.request.urlopen(request, timeout=max(self.stall_timeout_seconds, self.timeout_seconds)) as response:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace").strip()
@@ -153,7 +161,7 @@ class LocalOllamaWorkspaceAgent:
             ) from exc
         except TimeoutError as exc:
             raise TimeoutError(
-                f"Local Ollama model {self.model!r} timed out after {self.timeout_seconds}s."
+                f"Local Ollama model {self.model!r} timed out after {max(self.stall_timeout_seconds, self.timeout_seconds)}s."
             ) from exc
 
         try:

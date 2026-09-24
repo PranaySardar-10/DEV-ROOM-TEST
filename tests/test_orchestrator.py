@@ -10,6 +10,7 @@ from devroom.orchestrator import (
     MockProvider,
     ResourceGuard,
     Stage,
+    validate_coder_proposal,
 )
 from devroom.state_store import JsonWorkflowStateStore, WorkflowStateWriter
 
@@ -61,9 +62,40 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                 for task in provider.calls)
         )
 
-    def test_task_specification_is_propagated_to_every_agent_and_persisted(self) -> None:
+    def test_architect_isolated_from_raw_lead_output(self) -> None:
         provider = MockProvider()
-        specification = "EXACT FOUNDATION SPECIFICATION"
+        result = DevRoomOrchestrator(provider).run("Build foundation")
+        self.assertEqual(result.stage, Stage.HALTED)
+        architect = provider.calls[1]
+        self.assertEqual(architect.role, "Architect")
+        self.assertNotIn("lead_summary", architect.context)
+        self.assertNotIn("Mock Lead completed", architect.context.values())
+
+    def test_coder_receives_larger_generation_budget(self) -> None:
+        provider = MockProvider()
+        DevRoomOrchestrator(provider).run("Build foundation")
+        coder = provider.calls[2]
+        self.assertEqual(coder.role, "Coder")
+        self.assertEqual(coder.context["generation_num_predict"], "8192")
+
+    def test_task_specification_is_role_filtered_and_full_spec_is_persisted(self) -> None:
+        provider = MockProvider()
+        specification = """# Objective
+Build foundation.
+
+## Acceptance
+Implement the required foundation.
+
+## QA
+Report exactly:
+STRUCTURE: PASS
+
+## Human Unity validation
+Open Unity and validate.
+
+## Completion
+Do not report completion early.
+"""
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.json"
             writer = WorkflowStateWriter(JsonWorkflowStateStore(path), "spec-test")
@@ -73,14 +105,23 @@ class DevRoomOrchestratorTests(unittest.TestCase):
                 human_gate=self.approve_all,
             )
             self.assertEqual(result.stage, Stage.COMPLETE)
-            self.assertTrue(all(task.context["task_specification"] == specification for task in provider.calls))
+            for task in provider.calls:
+                spec = task.context["task_specification"]
+                if task.role == "QA":
+                    self.assertIn("STRUCTURE: PASS", spec)
+                    self.assertIn("Human Unity validation", spec)
+                    self.assertIn("Completion", spec)
+                else:
+                    self.assertNotIn("STRUCTURE: PASS", spec)
+                    self.assertNotIn("Human Unity validation", spec)
+                    self.assertNotIn("Completion", spec)
             persisted = JsonWorkflowStateStore(path).load("spec-test")
             self.assertEqual(persisted.specification, specification)
 
     def test_proposal_rejection_returns_to_coder(self) -> None:
         provider = MockProvider()
         decisions = iter([
-            (HumanDecision.REQUEST_CHANGES, "Split persistence from runtime state."),
+            (HumanDecision.REQUEST_CHANGES, "Coder: Split persistence from runtime state."),
             (HumanDecision.APPROVE, ""),
             (HumanDecision.APPROVE, ""),
         ])
@@ -96,6 +137,33 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         self.assertEqual(
             provider.calls[3].context["revision_instruction"],
             "Split persistence from runtime state.",
+        )
+
+    def test_proposal_rejection_revises_architecture_before_coder(self) -> None:
+        provider = MockProvider()
+        decisions = iter([
+            (HumanDecision.REQUEST_CHANGES, "Architect: Architect output must be implementation-specific."),
+            (HumanDecision.APPROVE, ""),
+            (HumanDecision.APPROVE, ""),
+        ])
+        result = DevRoomOrchestrator(provider).run(
+            "Implement vehicle ownership",
+            human_gate=lambda stage, prompt, context: next(decisions),
+        )
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            [task.role for task in provider.calls],
+            ["Lead", "Architect", "Coder", "Architect", "Coder", "Implementer", "QA"],
+        )
+        revised_architect = provider.calls[3]
+        self.assertEqual(
+            revised_architect.context["revision_instruction"],
+            "Architect output must be implementation-specific.",
+        )
+        self.assertIn("previous_architecture_summary", revised_architect.context)
+        self.assertEqual(
+            provider.calls[4].context["architecture_summary"],
+            "Mock Architect completed: Revise the implementation specification for: Implement vehicle ownership",
         )
 
     def test_unity_failure_returns_to_coder(self) -> None:
@@ -122,6 +190,131 @@ class DevRoomOrchestratorTests(unittest.TestCase):
             provider.calls[5].context["revision_instruction"],
             "The vehicle is not persisted after restart.",
         )
+
+    def test_coder_proposal_completeness_validator_requires_all_sections(self) -> None:
+        incomplete = """
+        IMPLEMENTATION FILES/DIRECTORIES
+        paths
+        CONCRETE CHANGES
+        changes
+        """
+        error = validate_coder_proposal(incomplete)
+        self.assertIsNotNone(error)
+        self.assertIn("DEPENDENCIES AND CONSTRAINTS", error)
+        self.assertIn("VERIFICATION PLAN", error)
+        self.assertIn("COMPLETENESS CHECK", error)
+        self.assertIsNone(
+            validate_coder_proposal(
+                """
+                IMPLEMENTATION FILES/DIRECTORIES
+                paths
+                CONCRETE CHANGES
+                changes
+                DEPENDENCIES AND CONSTRAINTS
+                constraints
+                VERIFICATION PLAN
+                verification
+                COMPLETENESS CHECK
+                complete
+                """
+            )
+        )
+
+    def test_incomplete_coder_proposal_uses_the_normal_human_review_gate(self) -> None:
+        class RecoveringCoder(MockProvider):
+            def __init__(self):
+                super().__init__()
+                self.coder_calls = 0
+
+            def execute(self, task):
+                if task.role == "Coder":
+                    self.calls.append(task)
+                    self.coder_calls += 1
+                    if self.coder_calls == 1:
+                        return AgentResult(
+                            role="Coder",
+                            summary=(
+                                "IMPLEMENTATION FILES/DIRECTORIES\n"
+                                "Assets/Omniversel/Tests\n"
+                                "CONCRETE CHANGES\n"
+                                "Create files."
+                            ),
+                            artifacts=("proposal-incomplete.txt",),
+                        )
+                    return AgentResult(
+                        role="Coder",
+                        summary=(
+                            "IMPLEMENTATION FILES/DIRECTORIES\npaths\n"
+                            "CONCRETE CHANGES\nchanges\n"
+                            "DEPENDENCIES AND CONSTRAINTS\nconstraints\n"
+                            "VERIFICATION PLAN\nverification\n"
+                            "COMPLETENESS CHECK\ncomplete"
+                        ),
+                        artifacts=("proposal-complete.txt",),
+                    )
+                return super().execute(task)
+
+        provider = RecoveringCoder()
+        seen_incomplete_context = {}
+        decisions = iter([
+            (HumanDecision.REQUEST_CHANGES, "Add every missing Coder contract section before resubmitting."),
+            (HumanDecision.APPROVE, ""),
+            (HumanDecision.APPROVE, ""),
+        ])
+        def gate(stage, prompt, context):
+            if "validation" in context:
+                seen_incomplete_context.update(context)
+            return next(decisions)
+        result = DevRoomOrchestrator(provider).run(
+            "Create the foundation",
+            human_gate=gate,
+        )
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            [task.role for task in provider.calls],
+            ["Lead", "Architect", "Coder", "Coder", "Implementer", "QA"],
+        )
+        self.assertIn("revision_instruction", provider.calls[3].context)
+        self.assertEqual(
+            provider.calls[3].context["revision_instruction"],
+            "Add every missing Coder contract section before resubmitting.",
+        )
+        self.assertIn("DEPENDENCIES AND CONSTRAINTS", seen_incomplete_context["validation"])
+        self.assertIn("VERIFICATION PLAN", seen_incomplete_context["validation"])
+        self.assertIn("COMPLETENESS CHECK", seen_incomplete_context["validation"])
+        self.assertIn("Coder", seen_incomplete_context["decision_options"])
+
+    def test_incomplete_coder_proposal_halts_after_feedback_limit(self) -> None:
+        class IncompleteCoder(MockProvider):
+            def execute(self, task):
+                if task.role == "Coder":
+                    self.calls.append(task)
+                    return AgentResult(
+                        role="Coder",
+                        summary=(
+                            "IMPLEMENTATION FILES/DIRECTORIES\n"
+                            "Assets/Omniversel/Tests\n"
+                            "CONCRETE CHANGES\n"
+                            "Create files."
+                        ),
+                        artifacts=("proposal.txt",),
+                    )
+                return super().execute(task)
+
+        provider = IncompleteCoder()
+        result = DevRoomOrchestrator(provider).run(
+            "Create the foundation",
+            human_gate=lambda stage, prompt, context: (
+                HumanDecision.HALT,
+                "Stop until the Coder contract is fixed.",
+            ),
+            max_feedback_cycles=2,
+        )
+        self.assertEqual(result.stage, Stage.HALTED)
+        self.assertIn(Stage.HUMAN_REVIEW, result.history)
+        self.assertNotIn(Stage.IMPLEMENTER, result.history)
+        self.assertEqual(result.halted_reason, "Stop until the Coder contract is fixed.")
+        self.assertEqual([task.role for task in provider.calls], ["Lead", "Architect", "Coder"])
 
     def test_empty_coder_halts_before_review(self) -> None:
         class EmptyCoder(MockProvider):
