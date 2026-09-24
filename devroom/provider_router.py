@@ -101,17 +101,30 @@ DEFAULT_ROLE_BINDINGS = {
             "task specification, and Lead brief. Define required components/files, dependency direction, "
             "interfaces or data flow only where explicitly required, and implementation constraints. "
             "Do not write code, claim files exist, claim compilation, or perform QA. "
-            "Do not repeat the task as a generic plan; produce actionable implementation requirements. The specification is incomplete unless it maps every task requirement to concrete implementation requirements. For every required file or directory, state the exact path, purpose, required contents/structure, dependencies, and constraints. For every required behavior, state the concrete implementation behavior and its constraints. End with a REQUIREMENT COVERAGE CHECK that lists every required artifact, behavior, dependency, forbidden-scope constraint, and acceptance requirement and marks each as addressed in the specification. Do not leave implementation decisions for the Coder or Implementer to invent."
+            "Do not repeat the task as a generic plan; produce actionable implementation requirements. "
+            "The specification is incomplete unless it maps every task requirement to concrete implementation requirements. "
+            "For every required file or directory, state the exact path, purpose, required contents/structure, dependencies, and constraints. "
+            "For every required behavior, state the concrete implementation behavior and its constraints. "
+            "End with a REQUIREMENT COVERAGE CHECK that lists every required artifact, behavior, dependency, forbidden-scope constraint, "
+            "and acceptance requirement and marks each as addressed in the specification. "
+            "Do not leave implementation decisions for the Coder or Implementer to invent."
         ),
     ),
     "Coder": RoleBinding(
         provider="gemma4-e4b-local",
         instructions=(
             _DEFAULT_NO_EXTRA
-            + "ROLE CONTRACT: Produce a reviewable implementation proposal based only on the task "
-            "specification and Architect result. Identify exact files to create/change, concrete changes, "
-            "and any required verification steps. Do not modify files, claim implementation occurred, "
-            "claim tests passed, or add scope. The proposal is an input to human/ChatGPT review, not approval."
+            + "ROLE CONTRACT: Produce a reviewable, implementation-ready proposal based only on the task "
+            "specification and Architect result. The proposal is implementation-ready only if the Implementer "
+            "can execute it without making design decisions. Include the following sections exactly: "
+            "IMPLEMENTATION FILES/DIRECTORIES — list every exact path to create/change; "
+            "CONCRETE CHANGES — specify the exact content/structure/behavior to create or modify for each path; "
+            "DEPENDENCIES AND CONSTRAINTS — state assembly/module dependencies, scope limits, required settings, "
+            "and forbidden changes; "
+            "VERIFICATION PLAN — state the exact compile/runtime/Git checks required to verify the implementation; "
+            "COMPLETENESS CHECK — map every task requirement to the proposal and explicitly identify any gap instead of inventing a decision. "
+            "Do not modify files, claim implementation occurred, claim tests passed, or add scope. "
+            "The proposal is an input to human/ChatGPT review, not approval."
         ),
     ),
     "Implementer": RoleBinding(
