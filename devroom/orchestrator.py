@@ -86,9 +86,23 @@ class MockProvider:
 
     def execute(self, task: AgentTask) -> AgentResult:
         self.calls.append(task)
+        summary = f"Mock {task.role} completed: {task.goal}"
+        if task.role == "Coder":
+            summary += (
+                "\nIMPLEMENTATION FILES/DIRECTORIES\n"
+                "Mock implementation paths.\n"
+                "CONCRETE CHANGES\n"
+                "Mock concrete changes.\n"
+                "DEPENDENCIES AND CONSTRAINTS\n"
+                "Mock dependencies and constraints.\n"
+                "VERIFICATION PLAN\n"
+                "Mock verification.\n"
+                "COMPLETENESS CHECK\n"
+                "All mock requirements addressed."
+            )
         return AgentResult(
             role=task.role,
-            summary=f"Mock {task.role} completed: {task.goal}",
+            summary=summary,
             artifacts=(f"mock-{task.role.lower()}-artifact",),
         )
 
