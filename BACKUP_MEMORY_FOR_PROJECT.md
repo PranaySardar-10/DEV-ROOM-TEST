@@ -854,3 +854,52 @@ Important validation status:
 - The latest redesign commits have NOT yet been pulled and run by the user.
 - Do not claim the 136/136 suite remains green after these changes until the user reruns it.
 - If the updated suite passes, rerun GAME-FOUNDATION-001. On an incomplete Coder proposal, the intended behavior is now to stop at a human prompt-or-halt gate rather than automatically consume retries.
+
+
+## 30. 2026-09-24 — HUMAN-GATE TEST REGRESSIONS FIXED; 136/136 GREEN
+
+After pulling commit `8015c0075a63a88effd9c7cfd03052474a396c2e` (`test: fix human-gate regression assertions`), the user reran the complete deterministic suite.
+
+Validation:
+- `python -m unittest discover -s tests -v`
+- **136 tests ran in 10.693 seconds — OK.**
+- The previously broken `test_proposal_rejection_returns_to_coder` passed.
+- `test_incomplete_coder_proposal_halts_after_feedback_limit` passed with the human-controlled halt reason.
+- `test_incomplete_coder_proposal_requires_human_correction` passed.
+- All other factory, provider, orchestration, control API, sandbox, workspace, state-store, and process-runner tests passed.
+- ResourceWarnings for temporary HTTP cleanup remained non-fatal.
+
+This establishes the current human-controlled incomplete-Coder gate as deterministically green.
+
+Current development branch head:
+`8015c0075a63a88effd9c7cfd03052474a396c2e`.
+
+The deterministic suite is now validated after the human-gate redesign. The next real production validation is allowed, but PR #7 still requires explicit human approval before merge.
+
+## 31. 2026-09-24 — HUMAN CORRECTIVE PROMPT PASTE FORMAT STANDARDIZED
+
+During the next real GAME-FOUNDATION-001 production run, the new human gate appeared correctly:
+
+- Coder produced an incomplete proposal.
+- DevRoom displayed the missing requirements:
+  - `DEPENDENCIES AND CONSTRAINTS`
+  - `VERIFICATION PLAN`
+  - `COMPLETENESS CHECK`
+- DevRoom presented the intended `[prompt/halt]` choice instead of automatically generating repair feedback.
+
+A practical CLI interaction issue was then discovered: a multiline corrective prompt pasted into the interactive PowerShell input was submitted after only its first line, so the complete corrective instruction did not reach the Coder. The user force-stopped the run.
+
+The user then tested a **large single-line corrective prompt with no blank lines** in the same PowerShell prompt, and confirmed that the entire prompt was accepted correctly and submitted as intended.
+
+New operational rule:
+- For human corrective prompts at the incomplete-Coder gate, use **one continuous physical line**.
+- Do not include blank lines or multiline formatting.
+- Keep the prompt comprehensive but single-line so PowerShell/interactive CLI paste does not interpret line breaks as submission.
+- Future corrective prompts supplied by ChatGPT for this gate should follow this single-line format.
+
+This is an interaction/input-format workaround, not yet a DevRoom code change. Do not claim the CLI itself has been permanently fixed unless a code change and test are made.
+
+Current production state:
+- The interrupted run should not be treated as a successful GAME-FOUNDATION-001 completion.
+- The Coder correction mechanism itself is now usable when the corrective prompt is pasted as one line.
+- Next production attempt should continue only after the user starts a fresh controlled run.
