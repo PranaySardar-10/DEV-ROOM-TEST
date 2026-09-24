@@ -454,15 +454,25 @@ class DevRoomOrchestrator:
         cycle = 0
 
         while cycle <= max_feedback_cycles:
-            # Coder completeness retries are local to the Coder stage. Lead and
-            # Architect are not re-run unless a human/Unity correction explicitly
-            # requires architectural revision.
+            # Coder completeness correction is human-controlled. If the proposal is
+            # incomplete, show the exact missing requirements and let the human provide
+            # a corrective prompt or halt. A complete proposal proceeds normally.
             coder_revision_feedback = revision_feedback
             proposal: AgentResult | None = None
             for coder_attempt in range(max_feedback_cycles + 1):
                 coder_context = {
                     "architecture_summary": architecture.summary,
-                    "review_target": "Prepare a concrete implementation proposal for human/ChatGPT review. Do not integrate into the production workspace.",
+                    "review_target": (
+                        "Prepare a concrete implementation proposal for human/ChatGPT review. "
+                        "Do not integrate into the production workspace."
+                    ),
+                    "coder_output_contract": (
+                        "Before returning the proposal, verify that it contains ALL five exact "
+                        "sections: IMPLEMENTATION FILES/DIRECTORIES, CONCRETE CHANGES, "
+                        "DEPENDENCIES AND CONSTRAINTS, VERIFICATION PLAN, and COMPLETENESS CHECK. "
+                        "Do not leave design decisions, file contents, dependencies, or verification "
+                        "steps for the Implementer. Treat this as a mandatory pre-submission checklist."
+                    ),
                 }
                 if coder_revision_feedback:
                     coder_context["revision_instruction"] = coder_revision_feedback
@@ -470,7 +480,11 @@ class DevRoomOrchestrator:
                 proposal = call(
                     Stage.CODER,
                     "Coder",
-                    f"Produce the implementation proposal for: {goal}",
+                    (
+                        f"Produce the implementation proposal for: {goal}. "
+                        "Before finishing, self-check the proposal against every required section "
+                        "and make it implementation-ready."
+                    ),
                     coder_context,
                 )
                 if not proposal.artifacts:
@@ -482,14 +496,32 @@ class DevRoomOrchestrator:
                 if proposal_error is None:
                     break
 
-                if coder_attempt >= max_feedback_cycles:
-                    persist(Stage.HALTED, proposal_error)
-                    return WorkflowResult(Stage.HALTED, history, results, proposal_error)
-
-                coder_revision_feedback = (
-                    proposal_error
-                    + " Revise the proposal now and resubmit it; do not wait for human review."
+                incomplete_context = {
+                    "architecture": architecture.summary,
+                    "proposal": proposal.summary,
+                    "validation": proposal_error,
+                    "decision_options": (
+                        "Provide a corrective prompt to the Coder or halt. "
+                        "An incomplete proposal cannot be approved."
+                    ),
+                }
+                decision, feedback = gate(
+                    Stage.HUMAN_REVIEW,
+                    (
+                        "Coder produced an incomplete proposal. Review the missing requirements below. "
+                        "Choose REQUEST_CHANGES to give the Coder a corrective prompt, or HALT."
+                    ),
+                    incomplete_context,
                 )
+                if decision is HumanDecision.HALT:
+                    reason = feedback or proposal_error
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+                if decision is HumanDecision.APPROVE:
+                    reason = "An incomplete Coder proposal cannot be approved for implementation."
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+                coder_revision_feedback = feedback or proposal_error
 
             assert proposal is not None
 
