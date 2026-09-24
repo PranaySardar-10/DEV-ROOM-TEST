@@ -220,8 +220,8 @@ Do not report completion early.
                 self.coder_calls = 0
 
             def execute(self, task):
-                self.calls.append(task)
                 if task.role == "Coder":
+                    self.calls.append(task)
                     self.coder_calls += 1
                     if self.coder_calls == 1:
                         return AgentResult(
@@ -263,8 +263,8 @@ Do not report completion early.
     def test_incomplete_coder_proposal_halts_after_feedback_limit(self) -> None:
         class IncompleteCoder(MockProvider):
             def execute(self, task):
-                self.calls.append(task)
                 if task.role == "Coder":
+                    self.calls.append(task)
                     return AgentResult(
                         role="Coder",
                         summary=(
