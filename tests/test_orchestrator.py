@@ -121,7 +121,7 @@ Do not report completion early.
     def test_proposal_rejection_returns_to_coder(self) -> None:
         provider = MockProvider()
         decisions = iter([
-            (HumanDecision.REQUEST_CHANGES, "Split persistence from runtime state."),
+            (HumanDecision.REQUEST_CHANGES, "Coder: Split persistence from runtime state."),
             (HumanDecision.APPROVE, ""),
             (HumanDecision.APPROVE, ""),
         ])
@@ -132,7 +132,7 @@ Do not report completion early.
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
             [task.role for task in provider.calls],
-            ["Lead", "Architect", "Coder", "Architect", "Coder", "Implementer", "QA"],
+            ["Lead", "Architect", "Coder", "Coder", "Implementer", "QA"],
         )
         self.assertEqual(
             provider.calls[3].context["revision_instruction"],
@@ -220,7 +220,7 @@ Do not report completion early.
             )
         )
 
-    def test_incomplete_coder_proposal_requires_human_correction(self) -> None:
+    def test_incomplete_coder_proposal_uses_the_normal_human_review_gate(self) -> None:
         class RecoveringCoder(MockProvider):
             def __init__(self):
                 super().__init__()
