@@ -794,3 +794,63 @@ Important validation status:
 - The user has NOT yet run the updated deterministic suite after these changes.
 - Do not claim the suite is green until the user pulls the branch and executes it.
 - Only after the suite passes should another expensive real GAME-FOUNDATION-001 Gemma run be performed.
+
+
+## 28. 2026-09-24 — CODER RETRY TEST FIX AND 136/136 GREEN
+
+The deterministic DevRoom suite reached 136/136 after fixing a test-fixture call-counting bug.
+
+The failing Coder retry tests had been double-counting non-Coder roles because their test-provider overrides appended the task and then called MockProvider.execute(), which appended the same task again. This made Lead/Architect/Implementer/QA appear to run twice even though the orchestrator was not doing so.
+
+Fix:
+- Test overrides now record calls themselves only when intercepting Coder; normal roles are recorded once by MockProvider.
+- Commit: 651a3aded2332467c60400fd349e58ac8e816665 — `test: avoid double-counting non-Coder calls`.
+
+Validation:
+- User pulled 651a3ad.
+- Full deterministic suite: 136 tests, 0 failures, 0 errors, status OK.
+- The Coder incomplete-proposal retry tests passed.
+- This established a real green baseline before the next production run.
+
+## 29. 2026-09-24 — REAL PRODUCTION RUN EXPOSED PERSISTENT CODER OMISSION; WORKFLOW DESIGN REVISED
+
+A real GAME-FOUNDATION-001 production run was attempted after the 136/136 deterministic suite passed.
+
+Production result:
+- Workflow halted at the Coder completeness check.
+- Exact reason: missing `DEPENDENCIES AND CONSTRAINTS`, `VERIFICATION PLAN`, and `COMPLETENESS CHECK`.
+- This demonstrates that the local model can still omit required proposal sections even though the control-plane validator correctly detects the omission.
+
+The user proposed a workflow redesign:
+- Remove the idea that DevRoom automatically generates a Coder repair feedback prompt.
+- When Coder output is incomplete, DevRoom should show exactly what is missing and pause for the human.
+- Human choices at this point should be:
+  1. provide a corrective prompt to the Coder, which then reruns Coder only;
+  2. halt the workflow.
+- If Coder output is complete, continue through the normal Human Review approval flow.
+- Lead and Architect must not be rerun merely because Coder needs correction.
+
+Control-plane changes implemented on `devroom/stall-timeout-role-contracts`:
+- `orchestrator.py` now makes incomplete Coder correction human-controlled instead of automatically inventing correction feedback.
+- The incomplete proposal gate exposes the original proposal, deterministic missing-section validation, and explicit prompt-or-halt decision options.
+- An incomplete proposal can never be approved for implementation; an approval attempt is converted to a halt.
+- `cli.py` now presents `prompt/halt` for this incomplete-Coder gate rather than the normal approve/request_changes/halt menu.
+- Coder task prompting was strengthened with a mandatory five-section pre-submission checklist and explicit self-check instruction:
+  - IMPLEMENTATION FILES/DIRECTORIES
+  - CONCRETE CHANGES
+  - DEPENDENCIES AND CONSTRAINTS
+  - VERIFICATION PLAN
+  - COMPLETENESS CHECK
+- Tests were updated to cover human-controlled correction and to assert that the missing requirements are surfaced to the human.
+
+Latest commits:
+- c4ddf3b7bf33228f5948d4fb4990053624184df8 — `change: make incomplete Coder proposals human-gated`
+- d96315a225a3f929020555ccaf4a4395119c36e4 — `cli: offer prompt-or-halt for incomplete Coder proposals`
+- 4d756842a3126f7c613b4cb3d6daf870a126e430 — `test: cover human-controlled Coder correction`
+- cc4f03532e602a850eb68008b71d038844d8a49 — `test: assert human control on incomplete Coder output`
+- 2bce35688bfafa9ac7e0c56c4c49cce6fb89fd31 — `test: capture incomplete Coder gate context`
+
+Important validation status:
+- The latest redesign commits have NOT yet been pulled and run by the user.
+- Do not claim the 136/136 suite remains green after these changes until the user reruns it.
+- If the updated suite passes, rerun GAME-FOUNDATION-001. On an incomplete Coder proposal, the intended behavior is now to stop at a human prompt-or-halt gate rather than automatically consume retries.
