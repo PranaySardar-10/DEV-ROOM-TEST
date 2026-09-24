@@ -608,3 +608,14 @@ First facts to establish:
 8. Current intended next step is one controlled production validation of GAME-FOUNDATION-001.
 
 The backup is a continuity document, not a replacement for the Git history. Always treat the actual repository, commits, task specification, and tests as authoritative over this narrative.
+
+
+---
+
+## 21. ONGOING CONTINUITY RULE
+
+From 2026-09-24 onward, project-significant progress should be recorded in this backup memory branch so future conversations can continue from an up-to-date project state.
+
+When a meaningful project action, decision, repository change, test result, architecture change, debugging discovery, production-run result, or next-step decision is completed, update `BACKUP_MEMORY_FOR_PROJECT.md` on `backup/memory-for-project-2026-09-24` with the new state.
+
+The backup is a continuity aid; actual repository files, commits, task specifications, tests, and production evidence remain authoritative.
