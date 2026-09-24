@@ -105,6 +105,13 @@ class ProviderRouterTests(unittest.TestCase):
         self.assertIn("acceptance criteria and QA/reporting sections describe what must later be verified", DEFAULT_ROLE_BINDINGS["Lead"].instructions)
         self.assertNotIn("If the task specification defines an exact output format, that format is authoritative.", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
         self.assertIn("Report the task-required QA fields exactly", DEFAULT_ROLE_BINDINGS["QA"].instructions)
+        self.assertIn("REQUIREMENT COVERAGE CHECK", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("exact path, purpose, required contents/structure", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("Do not leave implementation decisions for the Coder or Implementer to invent", DEFAULT_ROLE_BINDINGS["Architect"].instructions)
+        self.assertIn("implementation-ready only if the Implementer can execute it without making design decisions", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("VERIFICATION PLAN", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("COMPLETENESS CHECK", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
+        self.assertIn("identify the gap explicitly", DEFAULT_ROLE_BINDINGS["Coder"].instructions)
 
     def test_role_contract_boundary_is_present(self) -> None:
         worker = RecordingProvider()
