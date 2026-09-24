@@ -451,13 +451,14 @@ class DevRoomOrchestrator:
         )
 
         revision_feedback = ""
-        for cycle in range(max_feedback_cycles + 1):
+        cycle = 0
+
+        while cycle <= max_feedback_cycles:
+            # Coder completeness retries are local to the Coder stage. Lead and
+            # Architect are not re-run unless a human/Unity correction explicitly
+            # requires architectural revision.
             coder_revision_feedback = revision_feedback
             proposal: AgentResult | None = None
-
-            # Completeness retries belong inside the Coder stage. They must not
-            # restart already-completed Lead/Architect work or consume a broader
-            # architecture/human/Unity correction cycle.
             for coder_attempt in range(max_feedback_cycles + 1):
                 coder_context = {
                     "architecture_summary": architecture.summary,
@@ -491,6 +492,7 @@ class DevRoomOrchestrator:
                 )
 
             assert proposal is not None
+
             decision, feedback = gate(
                 Stage.HUMAN_REVIEW,
                 f"Review the proposed implementation with ChatGPT and decide whether it may enter the implementation stage: {goal}",
@@ -520,6 +522,7 @@ class DevRoomOrchestrator:
                         "revision_instruction": revision_feedback,
                     },
                 )
+                cycle += 1
                 continue
 
             implementation = call(
@@ -577,6 +580,7 @@ class DevRoomOrchestrator:
                 validation_feedback
                 or "Unity validation found a problem. Produce a corrected implementation proposal."
             )
+            cycle += 1
 
         reason = "Workflow ended without approval."
         persist(Stage.HALTED, reason)
