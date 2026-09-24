@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-import urllib.request
 
 from .orchestrator import AgentProvider, AgentResult, AgentTask
 from .process_runner import run_with_stall_timeout
@@ -15,6 +14,7 @@ class LocalOllamaConfig:
     stall_timeout_seconds: int = 1800
     timeout_seconds: int | None = None
     api_url: str = "http://localhost:11434/api/chat"
+    api_command: str = "curl.exe"
 
     def __post_init__(self) -> None:
         if self.timeout_seconds is not None:
@@ -48,20 +48,22 @@ class LocalOllamaProvider(AgentProvider):
                 "think": False,
             }
         ).encode("utf-8")
-        request = urllib.request.Request(
-            self.config.api_url,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
         try:
             completed = run_with_stall_timeout(
-                (self.config.command, "-s", self.config.api_url, payload.decode("utf-8")),
+                (
+                    self.config.api_command,
+                    "-sN",
+                    self.config.api_url,
+                    "-H",
+                    "Content-Type: application/json",
+                    "-d",
+                    payload.decode("utf-8"),
+                ),
                 stall_timeout_seconds=self.config.stall_timeout_seconds,
             )
         except FileNotFoundError as exc:
             raise RuntimeError(
-                f"Local Ollama command was not found: {self.config.command!r}"
+                f"Local Ollama API command was not found: {self.config.api_command!r}"
             ) from exc
         except TimeoutError as exc:
             raise TimeoutError(
