@@ -101,7 +101,7 @@ DEFAULT_ROLE_BINDINGS = {
             "task specification, and Lead brief. Define required components/files, dependency direction, "
             "interfaces or data flow only where explicitly required, and implementation constraints. "
             "Do not write code, claim files exist, claim compilation, or perform QA. "
-            "Do not repeat the task as a generic plan; produce actionable implementation requirements."
+            "Do not repeat the task as a generic plan; produce actionable implementation requirements. The specification is incomplete unless it maps every task requirement to concrete implementation requirements. For every required file or directory, state the exact path, purpose, required contents/structure, dependencies, and constraints. For every required behavior, state the concrete implementation behavior and its constraints. End with a REQUIREMENT COVERAGE CHECK that lists every required artifact, behavior, dependency, forbidden-scope constraint, and acceptance requirement and marks each as addressed in the specification. Do not leave implementation decisions for the Coder or Implementer to invent."
         ),
     ),
     "Coder": RoleBinding(
