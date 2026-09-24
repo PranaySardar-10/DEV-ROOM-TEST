@@ -619,3 +619,32 @@ From 2026-09-24 onward, project-significant progress should be recorded in this 
 When a meaningful project action, decision, repository change, test result, architecture change, debugging discovery, production-run result, or next-step decision is completed, update `BACKUP_MEMORY_FOR_PROJECT.md` on `backup/memory-for-project-2026-09-24` with the new state.
 
 The backup is a continuity aid; actual repository files, commits, task specifications, tests, and production evidence remain authoritative.
+
+
+---
+
+## 22. 2026-09-24 — PRODUCTION RUN ROLE-CONTAMINATION FIX
+
+A real GAME-FOUNDATION-001 production run was halted at the human-review gate after the Architect output incorrectly identified itself as Lead and reproduced a simulated Lead "Thinking Process". The following Coder/proposal output then began treating the prior generated specification as an active interaction. This confirmed a real cross-stage free-form context contamination problem.
+
+Concrete control-plane fix applied on development branch `devroom/stall-timeout-role-contracts`:
+- The Lead stage remains part of the workflow for planning/audit visibility.
+- Raw model-generated Lead output is no longer passed into the Architect context.
+- Architect now derives its implementation specification directly from the authoritative role contract, goal, and role-filtered task specification.
+- This removes a known contamination path instead of adding more prompt wording.
+- Added a deterministic regression test asserting that the Architect task contains no `lead_summary` and no raw Lead output.
+
+Commits on the development branch:
+- `e461e8cde41f60070ecd464e1fd8570e7ee0d908` — isolate Architect from raw Lead output.
+- `3005d5bf87d4a6615470d829e40b2ab3a1f68865` — add regression test for Lead→Architect isolation.
+
+The fix has been committed to the PR #7 development branch but has NOT yet been locally executed against the 123-test suite in this conversation. Do not claim the suite passed until the user runs it or equivalent execution evidence is available.
+
+Next execution path:
+1. Pull/update the local development checkout to the new branch head.
+2. Run the deterministic test suite.
+3. If green, rerun exactly one GAME-FOUNDATION-001 Gemma production validation.
+4. Inspect Architect and Coder outputs before human approval.
+5. If clean, continue to Implementer → QA → human Unity validation.
+
+Decision: stop adding speculative prompt complexity; use deterministic stage isolation and tests to eliminate the observed contamination path.
