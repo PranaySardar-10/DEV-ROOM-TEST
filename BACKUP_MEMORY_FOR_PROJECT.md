@@ -716,3 +716,39 @@ Current state:
 - The user's local checkout has not yet pulled this latest test-only fix.
 - The correct next action is to pull the branch and rerun the deterministic suite.
 - Do not run another Gemma production task until the full suite is green.
+
+
+## 26. 2026-09-24 — CODER IMPLEMENTATION-COMPLETENESS GAP IDENTIFIED
+
+After the deterministic suite reached 133/133 and the real GAME-FOUNDATION-001 workflow reached the human-review gate, the generated Coder proposal was reviewed and found incomplete. The proposal listed required directories and files but did not provide enough concrete implementation detail for the Implementer to execute safely without making design decisions.
+
+Specific incompleteness observed in the proposal:
+- It listed `Assets/Omniversel/Tests` as the scene-file creation item instead of the required `Assets/Omniversel/Tests/FoundationTest.unity`.
+- It omitted the exact seven asmdef dependency relationships.
+- It omitted the required `FoundationBootstrap.cs` namespace, class behavior, exact log message, and prohibited behaviors.
+- It omitted the exact required test-scene structure: one root `OmniverselFoundation` GameObject with `FoundationBootstrap` and no extra gameplay/network/UI/audio objects.
+- It omitted the required compilation, Play Mode, scope, and Git-hygiene verification requirements.
+
+Human/ChatGPT review decision:
+`request_changes` — do not allow implementation from an incomplete proposal.
+
+Important process observation:
+Repeated implementation-stage review failures are now recognized as a factory-quality pattern: upstream Architect/Coder outputs can be structurally descriptive but implementation-incomplete. Human Review should not repeatedly reconstruct missing implementation details. Instead, the DevRoom role contract should enforce completeness upstream.
+
+New intended Coder contract direction:
+- The Coder must produce an implementation-ready proposal.
+- Every required directory/file must have an exact path and purpose.
+- Every required file must specify concrete implementation requirements, dependencies, and verification.
+- Every task requirement must be mapped to the proposal.
+- The proposal must contain a completeness check confirming that all requirements, behaviors, dependencies, and constraints are covered.
+- The Implementer must be able to execute the approved proposal without inventing architecture or making design decisions.
+- The Coder must not modify files or claim implementation/tests/runtime validation.
+
+Human Review principle refined:
+The primary review question should be:
+**“Can the Implementer execute this proposal exactly as approved without inventing or designing anything?”**
+If the answer is no, request changes before implementation.
+
+This is a control-plane/factory-quality improvement, not a reason to add speculative game architecture. The next implementation work should strengthen the Coder contract and add deterministic tests for proposal completeness before spending another expensive real-model production run.
+
+The user explicitly requested that this and all subsequent meaningful project information be preserved in the ongoing backup branch `backup/memory-for-project-2026-09-24` for continuity in future chats. The starting-memory branch remains historical and must not be used for ongoing updates.
