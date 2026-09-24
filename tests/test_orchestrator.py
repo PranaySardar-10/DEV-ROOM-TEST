@@ -248,9 +248,14 @@ Do not report completion early.
                 return super().execute(task)
 
         provider = RecoveringCoder()
+        decisions = iter([
+            (HumanDecision.REQUEST_CHANGES, "Add every missing Coder contract section before resubmitting."),
+            (HumanDecision.APPROVE, ""),
+            (HumanDecision.APPROVE, ""),
+        ])
         result = DevRoomOrchestrator(provider).run(
             "Create the foundation",
-            human_gate=self.approve_all,
+            human_gate=lambda stage, prompt, context: next(decisions),
         )
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
@@ -258,7 +263,10 @@ Do not report completion early.
             ["Lead", "Architect", "Coder", "Coder", "Implementer", "QA"],
         )
         self.assertIn("revision_instruction", provider.calls[3].context)
-        self.assertIn("DEPENDENCIES AND CONSTRAINTS", provider.calls[3].context["revision_instruction"])
+        self.assertEqual(
+            provider.calls[3].context["revision_instruction"],
+            "Add every missing Coder contract section before resubmitting.",
+        )
 
     def test_incomplete_coder_proposal_halts_after_feedback_limit(self) -> None:
         class IncompleteCoder(MockProvider):
@@ -280,11 +288,14 @@ Do not report completion early.
         provider = IncompleteCoder()
         result = DevRoomOrchestrator(provider).run(
             "Create the foundation",
-            human_gate=self.approve_all,
+            human_gate=lambda stage, prompt, context: (
+                HumanDecision.HALT,
+                "Stop until the Coder contract is fixed.",
+            ),
             max_feedback_cycles=2,
         )
         self.assertEqual(result.stage, Stage.HALTED)
-        self.assertNotIn(Stage.HUMAN_REVIEW, result.history)
+        self.assertIn(Stage.HUMAN_REVIEW, result.history)
         self.assertNotIn(Stage.IMPLEMENTER, result.history)
         self.assertIn("Coder proposal is incomplete", result.halted_reason or "")
         self.assertIn("VERIFICATION PLAN", result.halted_reason or "")
