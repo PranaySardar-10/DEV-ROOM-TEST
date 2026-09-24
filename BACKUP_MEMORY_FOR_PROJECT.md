@@ -648,3 +648,17 @@ Next execution path:
 5. If clean, continue to Implementer → QA → human Unity validation.
 
 Decision: stop adding speculative prompt complexity; use deterministic stage isolation and tests to eliminate the observed contamination path.
+
+
+## 23. 2026-09-24 — DETERMINISTIC SUITE PASSED AFTER ROLE-ISOLATION FIX
+
+The local development checkout was fast-forwarded to `3005d5b` on `devroom/stall-timeout-role-contracts`.
+
+After the Lead→Architect isolation fix, the full deterministic test suite was executed successfully:
+- `python -m unittest discover -s tests -v`
+- **127 tests ran in 10.966 seconds — OK**.
+- The new regression test `test_architect_isolated_from_raw_lead_output` passed.
+- Existing local Ollama, orchestrator, provider-router, state-store, sandbox, workspace, and control/API tests also passed.
+- ResourceWarning messages for temporary HTTP 401/400/409 cleanup appeared but did not fail the suite.
+
+This is the first clean deterministic validation of the new contamination fix. The next step is one controlled real Gemma GAME-FOUNDATION-001 production run. Do not modify the architecture or add prompt complexity before observing that run.
