@@ -31,6 +31,7 @@ class LocalOllamaProviderTests(unittest.TestCase):
         self.assertEqual(payload["model"], "gemma4:e4b")
         self.assertFalse(payload["think"])
         self.assertTrue(payload["stream"])
+        self.assertEqual(payload["options"]["num_predict"], 4096)
         self.assertEqual(payload["messages"][0]["role"], "system")
         self.assertIn("implementation specification", payload["messages"][0]["content"])
 
@@ -49,6 +50,28 @@ class LocalOllamaProviderTests(unittest.TestCase):
             LocalOllamaProvider(LocalOllamaConfig(model="gemma4:e4b", stall_timeout_seconds=5)).execute(
                 AgentTask("Architect", "Design it")
             )
+
+
+    @patch("devroom.local_ollama_provider.run_with_stall_timeout")
+    def test_role_generation_budget_override_is_used(self, run) -> None:
+        run.return_value = ProcessRunResult(
+            '{"message":{"content":"Coder result"}}\n',
+            "",
+            0,
+        )
+        provider = LocalOllamaProvider(LocalOllamaConfig(model="gemma4:e4b"))
+        provider.execute(
+            AgentTask(
+                "Coder",
+                "Write the proposal",
+                {
+                    "role_instructions": "Produce all five proposal sections.",
+                    "generation_num_predict": "8192",
+                },
+            )
+        )
+        payload = json.loads(run.call_args.args[0][-1])
+        self.assertEqual(payload["options"]["num_predict"], 8192)
 
 
 if __name__ == "__main__":
