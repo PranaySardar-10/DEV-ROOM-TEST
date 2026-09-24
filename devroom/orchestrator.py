@@ -471,8 +471,14 @@ class DevRoomOrchestrator:
                 return WorkflowResult(Stage.HALTED, history, results, reason)
             proposal_error = validate_coder_proposal(proposal.summary)
             if proposal_error is not None:
-                persist(Stage.HALTED, proposal_error)
-                return WorkflowResult(Stage.HALTED, history, results, proposal_error)
+                if cycle >= max_feedback_cycles:
+                    persist(Stage.HALTED, proposal_error)
+                    return WorkflowResult(Stage.HALTED, history, results, proposal_error)
+                revision_feedback = (
+                    proposal_error
+                    + " Revise the proposal now and resubmit it; do not wait for human review."
+                )
+                continue
 
             decision, feedback = gate(
                 Stage.HUMAN_REVIEW,
