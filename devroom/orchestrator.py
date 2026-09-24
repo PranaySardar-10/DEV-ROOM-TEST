@@ -452,34 +452,45 @@ class DevRoomOrchestrator:
 
         revision_feedback = ""
         for cycle in range(max_feedback_cycles + 1):
-            coder_context = {
-                "architecture_summary": architecture.summary,
-                "review_target": "Prepare a concrete implementation proposal for human/ChatGPT review. Do not integrate into the production workspace.",
-            }
-            if revision_feedback:
-                coder_context["revision_instruction"] = revision_feedback
+            coder_revision_feedback = revision_feedback
+            proposal: AgentResult | None = None
 
-            proposal = call(
-                Stage.CODER,
-                "Coder",
-                f"Produce the implementation proposal for: {goal}",
-                coder_context,
-            )
-            if not proposal.artifacts:
-                reason = "Coder completed without producing a reviewable implementation proposal."
-                persist(Stage.HALTED, reason)
-                return WorkflowResult(Stage.HALTED, history, results, reason)
-            proposal_error = validate_coder_proposal(proposal.summary)
-            if proposal_error is not None:
-                if cycle >= max_feedback_cycles:
+            # Completeness retries belong inside the Coder stage. They must not
+            # restart already-completed Lead/Architect work or consume a broader
+            # architecture/human/Unity correction cycle.
+            for coder_attempt in range(max_feedback_cycles + 1):
+                coder_context = {
+                    "architecture_summary": architecture.summary,
+                    "review_target": "Prepare a concrete implementation proposal for human/ChatGPT review. Do not integrate into the production workspace.",
+                }
+                if coder_revision_feedback:
+                    coder_context["revision_instruction"] = coder_revision_feedback
+
+                proposal = call(
+                    Stage.CODER,
+                    "Coder",
+                    f"Produce the implementation proposal for: {goal}",
+                    coder_context,
+                )
+                if not proposal.artifacts:
+                    reason = "Coder completed without producing a reviewable implementation proposal."
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+
+                proposal_error = validate_coder_proposal(proposal.summary)
+                if proposal_error is None:
+                    break
+
+                if coder_attempt >= max_feedback_cycles:
                     persist(Stage.HALTED, proposal_error)
                     return WorkflowResult(Stage.HALTED, history, results, proposal_error)
-                revision_feedback = (
+
+                coder_revision_feedback = (
                     proposal_error
                     + " Revise the proposal now and resubmit it; do not wait for human review."
                 )
-                continue
 
+            assert proposal is not None
             decision, feedback = gate(
                 Stage.HUMAN_REVIEW,
                 f"Review the proposed implementation with ChatGPT and decide whether it may enter the implementation stage: {goal}",
