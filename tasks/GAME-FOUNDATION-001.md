@@ -75,10 +75,11 @@ PASS only when:
 6. FoundationTest exists with the required object/component.
 7. Unity compiles without task-caused errors.
 8. Play Mode produces the exact required initialization message.
-9. Play Mode can be entered/exited twice without foundation-related errors.
-10. Clean Unity reopen still works.
-11. Git changes are limited to this task.
-12. No generated/cache directories, secrets, or unrelated files are added.
+9. Play Mode can be entered/exited twice without foundation-related errors and the exact initialization message is observable on both runs.
+10. Human can clearly identify the working foundation from the exact Hierarchy, Inspector component, and Console message without needing to infer success from hidden state.
+11. Clean Unity reopen still works.
+12. Git changes are limited to this task.
+13. No generated/cache directories, secrets, or unrelated files are added.
 
 ## QA
 Report exactly:
@@ -94,7 +95,17 @@ GIT HYGIENE: PASS/FAIL
 If any requirement fails, do not claim completion.
 
 ## Human Unity validation
-Open FoundationTest.unity, enter Play Mode, verify Omniversel Foundation initialized, exit, enter Play Mode again, and verify the same result without errors.
+The first task must provide an immediately understandable, human-visible proof that the foundation is working. Do not add a UI, HUD, gameplay visuals, camera system, or decorative scene content just to create visual feedback.
+
+Open FoundationTest.unity and verify these exact visible states before and during Play Mode:
+1. In the Hierarchy, exactly one root GameObject is visible: `OmniverselFoundation`.
+2. Selecting `OmniverselFoundation` shows the `FoundationBootstrap` component in the Inspector.
+3. Enter Play Mode.
+4. In the Unity Console, exactly the message `Omniversel Foundation initialized` appears from the foundation initialization.
+5. The Hierarchy remains limited to the single `OmniverselFoundation` root; no player, camera-controller, UI, audio, networking, or gameplay objects appear.
+6. Exit Play Mode, enter Play Mode a second time, and verify the same exact initialization message appears again without foundation-related errors.
+
+This Console message plus the exact Hierarchy/Inspector state is the intended first-task proof of success. No additional visual system is required or desired for this foundation task.
 
 ## Completion
 Do not report completion until implementation, QA, and human Unity validation all pass. If any requirement is ambiguous or impossible, report the exact conflict instead of inventing a solution.
