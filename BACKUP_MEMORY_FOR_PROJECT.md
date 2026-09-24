@@ -903,3 +903,16 @@ Current production state:
 - The interrupted run should not be treated as a successful GAME-FOUNDATION-001 completion.
 - The Coder correction mechanism itself is now usable when the corrective prompt is pasted as one line.
 - Next production attempt should continue only after the user starts a fresh controlled run.
+
+## 32. Coder production-completion fix
+- Real GAME-FOUNDATION-001 production runs repeatedly reached the human gate with an incomplete Coder proposal. The deterministic validator correctly rejected missing DEPENDENCIES AND CONSTRAINTS, VERIFICATION PLAN, and COMPLETENESS CHECK, but repeated human corrective prompts did not solve the underlying generation/completion issue.
+- Root cause evidence: Gemma Coder output repeatedly stopped during CONCRETE CHANGES, even after multiple corrective prompts. This was treated as a Coder generation-completion problem rather than weakening the completeness gate.
+- Fix committed on devroom/stall-timeout-role-contracts:
+  - 587d5793e4fb123cb0542d42aa2ebb2995ba5e8d — Local Ollama provider now supports a per-task generation_num_predict override while retaining the normal default of 4096.
+  - 0e6e2ae5453ede5e68fc6664c8b46854fd9ddcb1 — Orchestrator gives only the Coder role generation_num_predict=8192, preserving the smaller budget for other roles.
+  - 5c4d61fa75ab08751c932e6d7d30a1024828bc3c — Coder role contract made concise/completion-focused: exactly five required sections, no task-spec reproduction, no generic preamble/planning, and explicit instruction to finish all five sections.
+  - 6c842a1f041c56fb2c6ab5bfc609df2ebb123491 — Provider test added for generation-budget override.
+  - e51a5649e2f51634acaae5717abacd2c592dd798 — Orchestrator test added to assert Coder receives the 8192 generation budget.
+- Human-gated completeness behavior remains intact; this change does not auto-approve, auto-repair, or weaken the Coder validator.
+- GitHub Actions did not report a workflow run for the latest commit, so the deterministic suite still needs to be run from the user's local checkout before treating the fix as verified.
+
