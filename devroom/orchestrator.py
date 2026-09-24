@@ -401,12 +401,16 @@ class DevRoomOrchestrator:
             persist(stage, last_decision=decision, last_feedback=feedback)
             return decision, feedback
 
-        lead = call(Stage.LEAD, "Lead", goal)
+        # Lead is an advisory planning stage. Do not feed raw model-generated Lead
+        # output into Architect: upstream free-form text can contain role-like
+        # instructions or simulated reasoning that small local models may follow.
+        # Architect must derive its implementation specification from the authoritative
+        # task specification and its own role contract.
+        call(Stage.LEAD, "Lead", goal)
         architecture = call(
             Stage.ARCHITECT,
             "Architect",
             f"Design the implementation for: {goal}",
-            {"lead_summary": lead.summary},
         )
 
         revision_feedback = ""
