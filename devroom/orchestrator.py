@@ -337,6 +337,11 @@ class DevRoomOrchestrator:
                 task_context["workspace"] = str(workspace)
             if allowed_paths:
                 task_context["allowed_paths"] = ",".join(str(path) for path in allowed_paths)
+            if role == "Coder":
+                # Coder proposals have a five-section contract and need more output headroom
+                # than the other planning roles. Keep this budget role-specific so ordinary
+                # local inference does not become slower just because Coder needs completeness.
+                task_context["generation_num_predict"] = "8192"
             role_specification = task_specification_for_role(role)
             if role_specification:
                 task_context["task_specification"] = role_specification
