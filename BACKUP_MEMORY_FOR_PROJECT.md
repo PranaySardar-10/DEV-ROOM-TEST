@@ -916,3 +916,34 @@ Current production state:
 - Human-gated completeness behavior remains intact; this change does not auto-approve, auto-repair, or weaken the Coder validator.
 - GitHub Actions did not report a workflow run for the latest commit, so the deterministic suite still needs to be run from the user's local checkout before treating the fix as verified.
 
+
+
+## 33. 2026-09-25 — SIMPLIFIED TO ONE HUMAN REVIEW GATE WITH TARGETED ROLE CORRECTIONS
+
+The user rejected the separate special-case incomplete-Coder human gate. The intended factory control flow is now:
+
+Lead → Architect → Coder → **one normal Human Review gate** → Implementer → QA → Human Unity Validation.
+
+The Human Review gate is the same gate regardless of whether the Coder proposal is complete or incomplete. It presents the proposal and, when applicable, deterministic validation findings. The human can:
+- APPROVE when the proposal is implementation-ready.
+- REQUEST_CHANGES and optionally target a specific role by prefixing the feedback, e.g. `Coder: ...` or `Architect: ...`.
+- HALT.
+
+Correction behavior:
+- No role prefix defaults to Coder correction.
+- `Coder: ...` reruns only Coder using the existing architecture plus the human's specific correction.
+- `Architect: ...` reruns Architect with the correction, then Coder is rerun against the revised architecture.
+- An incomplete Coder proposal cannot be approved; it must be corrected or halted.
+- Lead/Architect are no longer rerun merely because Coder output is incomplete.
+- There is no separate prompt/halt gate for incomplete Coder output.
+- CLI uses the same `approve/request_changes/halt` interaction for normal Human Review; the user can mention the target role directly in the feedback.
+
+Implementation commits on `devroom/stall-timeout-role-contracts`:
+- `factory: simplify human review to one targeted correction gate` — removed the special incomplete-Coder gate and routed review corrections through the normal Human Review gate.
+- `factory: use one standard human review prompt` — removed the CLI-specific `prompt/halt` branch.
+- `tests: update human review flow for targeted role corrections` — updated regression expectations so ordinary proposal correction targets Coder by default / explicitly.
+
+Important validation status:
+- These latest simplification changes have been committed to the development branch but have NOT yet been run through the user's local 136+ deterministic test suite.
+- Do not claim the suite is green until the user pulls/runs the updated branch.
+- PR #7 remains open/unmerged and requires explicit human approval before merge.
