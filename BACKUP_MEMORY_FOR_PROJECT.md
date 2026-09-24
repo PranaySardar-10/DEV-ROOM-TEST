@@ -698,3 +698,21 @@ Important:
 - Do not claim the deterministic suite is still 127/127 after these changes until the user pulls and runs it.
 - Do not run another expensive Gemma production task until the new deterministic tests pass.
 - If the suite passes, rerun one controlled GAME-FOUNDATION-001 production validation and inspect the complete Architect/Coder outputs.
+
+
+## 25. 2026-09-24 — GENERATION-BUDGET TEST FIX
+
+The first local test run after the explicit `num_predict` fix produced **130 tests with 2 errors**, both in the newly added generation-budget tests. The production provider itself was not shown to fail; the failures came from the test fixture.
+
+Root cause:
+- The mocked Ollama streaming response in `tests/test_local_ollama_generation_budget.py` contained literal escaped `\\n` text instead of actual newline separators.
+- `LocalOllamaProvider.execute()` correctly parses Ollama's streaming response line-by-line with `splitlines()`, so the malformed fixture produced no parsed message content and triggered the intended empty-output guard.
+
+Concrete fix:
+- Corrected the test fixture to use actual newline separators.
+- Commit: `5ea33a306c9cc70709badd89df9c66fbab3f91c7` — `test: fix Ollama stream fixture newlines`.
+
+Current state:
+- The user's local checkout has not yet pulled this latest test-only fix.
+- The correct next action is to pull the branch and rerun the deterministic suite.
+- Do not run another Gemma production task until the full suite is green.
