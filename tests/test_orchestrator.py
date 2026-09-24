@@ -142,7 +142,7 @@ Do not report completion early.
     def test_proposal_rejection_revises_architecture_before_coder(self) -> None:
         provider = MockProvider()
         decisions = iter([
-            (HumanDecision.REQUEST_CHANGES, "Architect output must be implementation-specific."),
+            (HumanDecision.REQUEST_CHANGES, "Architect: Architect output must be implementation-specific."),
             (HumanDecision.APPROVE, ""),
             (HumanDecision.APPROVE, ""),
         ])
@@ -282,7 +282,7 @@ Do not report completion early.
         self.assertIn("DEPENDENCIES AND CONSTRAINTS", seen_incomplete_context["validation"])
         self.assertIn("VERIFICATION PLAN", seen_incomplete_context["validation"])
         self.assertIn("COMPLETENESS CHECK", seen_incomplete_context["validation"])
-        self.assertIn("prompt", seen_incomplete_context["decision_options"])
+        self.assertIn("Coder", seen_incomplete_context["decision_options"])
 
     def test_incomplete_coder_proposal_halts_after_feedback_limit(self) -> None:
         class IncompleteCoder(MockProvider):
