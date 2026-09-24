@@ -26,7 +26,7 @@ class LocalOllamaGenerationBudgetTests(unittest.TestCase):
             captured["command"] = command
             return type("Completed", (), {
                 "returncode": 0,
-                "stdout": '{"message":{"content":"complete proposal"}}\\n{"done":true}\\n',
+                "stdout": '{"message":{"content":"complete proposal"}}\n{"done":true}\n',
                 "stderr": "",
             })()
 
@@ -47,7 +47,7 @@ class LocalOllamaGenerationBudgetTests(unittest.TestCase):
             captured["command"] = command
             return type("Completed", (), {
                 "returncode": 0,
-                "stdout": '{"message":{"content":"proposal"}}\\n',
+                "stdout": '{"message":{"content":"proposal"}}\n',
                 "stderr": "",
             })()
 
