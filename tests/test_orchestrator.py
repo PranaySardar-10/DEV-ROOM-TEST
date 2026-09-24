@@ -10,6 +10,7 @@ from devroom.orchestrator import (
     MockProvider,
     ResourceGuard,
     Stage,
+    validate_coder_proposal,
 )
 from devroom.state_store import JsonWorkflowStateStore, WorkflowStateWriter
 
@@ -182,6 +183,63 @@ Do not report completion early.
             provider.calls[5].context["revision_instruction"],
             "The vehicle is not persisted after restart.",
         )
+
+    def test_coder_proposal_completeness_validator_requires_all_sections(self) -> None:
+        incomplete = """
+        IMPLEMENTATION FILES/DIRECTORIES
+        paths
+        CONCRETE CHANGES
+        changes
+        """
+        error = validate_coder_proposal(incomplete)
+        self.assertIsNotNone(error)
+        self.assertIn("DEPENDENCIES AND CONSTRAINTS", error)
+        self.assertIn("VERIFICATION PLAN", error)
+        self.assertIn("COMPLETENESS CHECK", error)
+        self.assertIsNone(
+            validate_coder_proposal(
+                """
+                IMPLEMENTATION FILES/DIRECTORIES
+                paths
+                CONCRETE CHANGES
+                changes
+                DEPENDENCIES AND CONSTRAINTS
+                constraints
+                VERIFICATION PLAN
+                verification
+                COMPLETENESS CHECK
+                complete
+                """
+            )
+        )
+
+    def test_incomplete_coder_proposal_halts_before_human_review(self) -> None:
+        class IncompleteCoder(MockProvider):
+            def execute(self, task):
+                self.calls.append(task)
+                if task.role == "Coder":
+                    return AgentResult(
+                        role="Coder",
+                        summary=(
+                            "IMPLEMENTATION FILES/DIRECTORIES\n"
+                            "Assets/Omniversel/Tests\n"
+                            "CONCRETE CHANGES\n"
+                            "Create files."
+                        ),
+                        artifacts=("proposal.txt",),
+                    )
+                return super().execute(task)
+
+        provider = IncompleteCoder()
+        result = DevRoomOrchestrator(provider).run(
+            "Create the foundation",
+            human_gate=self.approve_all,
+        )
+        self.assertEqual(result.stage, Stage.HALTED)
+        self.assertNotIn(Stage.HUMAN_REVIEW, result.history)
+        self.assertNotIn(Stage.IMPLEMENTER, result.history)
+        self.assertIn("Coder proposal is incomplete", result.halted_reason or "")
+        self.assertIn("VERIFICATION PLAN", result.halted_reason or "")
 
     def test_empty_coder_halts_before_review(self) -> None:
         class EmptyCoder(MockProvider):
