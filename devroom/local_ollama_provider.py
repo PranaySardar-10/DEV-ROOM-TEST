@@ -15,6 +15,7 @@ class LocalOllamaConfig:
     timeout_seconds: int | None = None
     api_url: str = "http://localhost:11434/api/chat"
     api_command: str = "curl.exe"
+    num_predict: int = 4096
 
     def __post_init__(self) -> None:
         if self.timeout_seconds is not None:
@@ -34,6 +35,8 @@ class LocalOllamaProvider(AgentProvider):
             raise ValueError("Ollama model must not be blank.")
         if self.config.stall_timeout_seconds <= 0:
             raise ValueError("stall_timeout_seconds must be > 0.")
+        if self.config.num_predict <= 0:
+            raise ValueError("num_predict must be > 0.")
 
     def execute(self, task: AgentTask) -> AgentResult:
         prompt = self._build_prompt(task)
@@ -46,6 +49,7 @@ class LocalOllamaProvider(AgentProvider):
                 ],
                 "stream": True,
                 "think": False,
+                "options": {"num_predict": self.config.num_predict},
             }
         ).encode("utf-8")
         try:
