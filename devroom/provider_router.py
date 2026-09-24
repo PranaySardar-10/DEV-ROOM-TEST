@@ -114,7 +114,7 @@ DEFAULT_ROLE_BINDINGS = {
         provider="gemma4-e4b-local",
         instructions=(
             _DEFAULT_NO_EXTRA
-            + "ROLE CONTRACT: Produce a reviewable, implementation-ready proposal based only on the task "
+            + "ROLE CONTRACT: Produce a reviewable implementation proposal that is implementation-ready based only on the task "
             "specification and Architect result. The proposal is implementation-ready only if the Implementer "
             "can execute it without making design decisions. Include the following sections exactly: "
             "IMPLEMENTATION FILES/DIRECTORIES — list every exact path to create/change; "
