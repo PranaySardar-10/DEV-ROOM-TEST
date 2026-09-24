@@ -44,15 +44,17 @@ class LocalOllamaWorkspaceAgent:
     api_url: str = "http://localhost:11434/api/generate"
     num_predict: int = 4096
 
+    def __post_init__(self) -> None:
+        if self.stall_timeout_seconds <= 0:
+            raise ValueError("stall_timeout_seconds must be > 0.")
+        if self.num_predict <= 0:
+            raise ValueError("num_predict must be > 0.")
+
     def execute_in_workspace(
         self,
         task: AgentTask,
         workspace: LocalWorkspaceProvider,
     ) -> AgentResult:
-        if self.stall_timeout_seconds <= 0:
-            raise ValueError("stall_timeout_seconds must be > 0.")
-        if self.num_predict <= 0:
-            raise ValueError("num_predict must be > 0.")
         if task.role != "Implementer":
             raise PermissionError("LocalOllamaWorkspaceAgent is restricted to Implementer.")
         if task.context.get("sandbox") != WORKSPACE_WRITE:
