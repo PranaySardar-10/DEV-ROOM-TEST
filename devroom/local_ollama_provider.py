@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import urllib.request
 
 from .orchestrator import AgentProvider, AgentResult, AgentTask
 from .process_runner import run_with_stall_timeout
@@ -12,6 +14,7 @@ class LocalOllamaConfig:
     model: str = ""
     stall_timeout_seconds: int = 1800
     timeout_seconds: int | None = None
+    api_url: str = "http://localhost:11434/api/chat"
 
     def __post_init__(self) -> None:
         if self.timeout_seconds is not None:
@@ -34,10 +37,26 @@ class LocalOllamaProvider(AgentProvider):
 
     def execute(self, task: AgentTask) -> AgentResult:
         prompt = self._build_prompt(task)
-        command = (self.config.command, "run", self.config.model, prompt)
+        payload = json.dumps(
+            {
+                "model": self.config.model,
+                "messages": [
+                    {"role": "system", "content": task.context.get("role_instructions", "")},
+                    {"role": "user", "content": prompt},
+                ],
+                "stream": True,
+                "think": False,
+            }
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            self.config.api_url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
         try:
             completed = run_with_stall_timeout(
-                command,
+                (self.config.command, "-s", self.config.api_url, payload.decode("utf-8")),
                 stall_timeout_seconds=self.config.stall_timeout_seconds,
             )
         except FileNotFoundError as exc:
@@ -56,7 +75,18 @@ class LocalOllamaProvider(AgentProvider):
                 f"Local Ollama model {self.config.model!r} failed with exit code "
                 f"{completed.returncode}: {detail or 'no diagnostic output'}"
             )
-        summary = completed.stdout.strip()
+
+        chunks = []
+        for line in completed.stdout.splitlines():
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            message = item.get("message") or {}
+            content = message.get("content")
+            if content:
+                chunks.append(str(content))
+        summary = "".join(chunks).strip()
         if not summary:
             raise RuntimeError(
                 f"Local Ollama model {self.config.model!r} returned empty output."
