@@ -752,3 +752,45 @@ If the answer is no, request changes before implementation.
 This is a control-plane/factory-quality improvement, not a reason to add speculative game architecture. The next implementation work should strengthen the Coder contract and add deterministic tests for proposal completeness before spending another expensive real-model production run.
 
 The user explicitly requested that this and all subsequent meaningful project information be preserved in the ongoing backup branch `backup/memory-for-project-2026-09-24` for continuity in future chats. The starting-memory branch remains historical and must not be used for ongoing updates.
+
+
+## 27. 2026-09-24 — IMPLEMENTATION-COMPLETENESS ENFORCEMENT ADDED
+
+The incomplete Coder proposal problem was fixed at the DevRoom control-plane level rather than relying only on Human Review wording.
+
+Changes on devroom/stall-timeout-role-contracts:
+- provider_router.py strengthened the Architect contract:
+  - every task requirement must map to concrete implementation requirements;
+  - every required file/directory must include exact path, purpose, contents/structure, dependencies, and constraints;
+  - required behaviors must be concretely specified;
+  - the Architect must end with a REQUIREMENT COVERAGE CHECK;
+  - implementation decisions must not be left for Coder/Implementer to invent.
+- The Coder contract was strengthened:
+  - proposal must be implementation-ready;
+  - every file/directory needs exact path, purpose, concrete change/create instructions, dependencies, and constraints;
+  - structured artifacts/scenes must specify exact structure/objects/fields, not merely a containing directory;
+  - proposal must include a VERIFICATION PLAN;
+  - proposal must end with a COMPLETENESS CHECK;
+  - missing Architect detail must be identified rather than silently invented.
+- orchestrator.py now performs a deterministic pre-review completeness gate for Coder output. A proposal is halted before Human Review if it lacks:
+  - IMPLEMENTATION FILES/DIRECTORIES
+  - CONCRETE CHANGES
+  - DEPENDENCIES AND CONSTRAINTS
+  - VERIFICATION PLAN
+  - COMPLETENESS CHECK
+- Mock workflow output was updated to satisfy the new contract.
+- Deterministic tests were added for the validator and for halting an incomplete Coder proposal before Human Review.
+
+Commits:
+- f767d29cb4aa099ce92a74e20930fe64707a0686 — strengthen Architect/Coder implementation-completeness contracts.
+- 8f1cbe8fdca2557d6fb0bc794f4fffa863b1b7c5 — reject incomplete Coder proposals before review.
+- de2396070300f835901a0fea00fe110cad0a821b — keep mock Coder proposal contract-complete.
+- 0b6b9aa297afcb631187cea5c3daa604327152ae — add deterministic completeness tests.
+
+Current known development branch head: 0b6b9aa297afcb631187cea5c3daa604327152ae.
+
+Important validation status:
+- These changes have been committed remotely.
+- The user has NOT yet run the updated deterministic suite after these changes.
+- Do not claim the suite is green until the user pulls the branch and executes it.
+- Only after the suite passes should another expensive real GAME-FOUNDATION-001 Gemma run be performed.
