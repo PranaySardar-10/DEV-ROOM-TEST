@@ -120,7 +120,7 @@ Do not report completion early.
         ])
         result = DevRoomOrchestrator(provider).run(
             "Implement vehicle ownership",
-            human_gate=lambda stage, prompt, context: next(decisions),
+            human_gate=gate,
         )
         self.assertEqual(result.stage, Stage.COMPLETE)
         self.assertEqual(
@@ -213,7 +213,7 @@ Do not report completion early.
             )
         )
 
-    def test_incomplete_coder_proposal_is_automatically_retried(self) -> None:
+    def test_incomplete_coder_proposal_requires_human_correction(self) -> None:
         class RecoveringCoder(MockProvider):
             def __init__(self):
                 super().__init__()
@@ -248,11 +248,16 @@ Do not report completion early.
                 return super().execute(task)
 
         provider = RecoveringCoder()
+        seen_incomplete_context = {}
         decisions = iter([
             (HumanDecision.REQUEST_CHANGES, "Add every missing Coder contract section before resubmitting."),
             (HumanDecision.APPROVE, ""),
             (HumanDecision.APPROVE, ""),
         ])
+        def gate(stage, prompt, context):
+            if "validation" in context:
+                seen_incomplete_context.update(context)
+            return next(decisions)
         result = DevRoomOrchestrator(provider).run(
             "Create the foundation",
             human_gate=lambda stage, prompt, context: next(decisions),
@@ -267,6 +272,10 @@ Do not report completion early.
             provider.calls[3].context["revision_instruction"],
             "Add every missing Coder contract section before resubmitting.",
         )
+        self.assertIn("DEPENDENCIES AND CONSTRAINTS", seen_incomplete_context["validation"])
+        self.assertIn("VERIFICATION PLAN", seen_incomplete_context["validation"])
+        self.assertIn("COMPLETENESS CHECK", seen_incomplete_context["validation"])
+        self.assertIn("prompt", seen_incomplete_context["decision_options"])
 
     def test_incomplete_coder_proposal_halts_after_feedback_limit(self) -> None:
         class IncompleteCoder(MockProvider):
@@ -299,7 +308,7 @@ Do not report completion early.
         self.assertNotIn(Stage.IMPLEMENTER, result.history)
         self.assertIn("Coder proposal is incomplete", result.halted_reason or "")
         self.assertIn("VERIFICATION PLAN", result.halted_reason or "")
-        self.assertEqual([task.role for task in provider.calls], ["Lead", "Architect", "Coder", "Coder", "Coder"])
+        self.assertEqual([task.role for task in provider.calls], ["Lead", "Architect", "Coder"])
 
     def test_empty_coder_halts_before_review(self) -> None:
         class EmptyCoder(MockProvider):
