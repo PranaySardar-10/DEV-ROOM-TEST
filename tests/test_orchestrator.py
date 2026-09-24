@@ -71,6 +71,13 @@ class DevRoomOrchestratorTests(unittest.TestCase):
         self.assertNotIn("lead_summary", architect.context)
         self.assertNotIn("Mock Lead completed", architect.context.values())
 
+    def test_coder_receives_larger_generation_budget(self) -> None:
+        provider = MockProvider()
+        DevRoomOrchestrator(provider).run("Build foundation")
+        coder = provider.calls[2]
+        self.assertEqual(coder.role, "Coder")
+        self.assertEqual(coder.context["generation_num_predict"], "8192")
+
     def test_task_specification_is_role_filtered_and_full_spec_is_persisted(self) -> None:
         provider = MockProvider()
         specification = """# Objective
