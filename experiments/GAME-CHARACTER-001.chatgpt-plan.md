@@ -1,134 +1,590 @@
-# GAME-CHARACTER-001 — Playable Joe Prototype
+# GAME-CHARACTER-001 — DIRECT CHATGPT IMPLEMENTATION ARTIFACT PLAN
+
+## APPROVAL CONTRACT
+
+This document is the complete implementation artifact plan authored by ChatGPT.
+
+The constrained Implementer must apply these artifacts and the exact scene/component configuration below. It must NOT redesign the controller, choose different architecture, invent additional systems, or ask a local model to generate missing code.
+
+The only implementation decisions left to the Implementer are mechanical integration details required to attach these exact artifacts to the already-existing Joe and CharacterTest scene.
 
 ## OBJECTIVE
 
-Create the minimal, deterministic Omniversel Roleplay third-person playable-character prototype using the existing Joe asset and existing Mixamo/Unity Humanoid setup in the Unity workspace.
+Create the minimal deterministic third-person playable Joe prototype in:
 
-The implementation must inspect and reuse what is already present. Do not recreate or replace existing Joe/avatar/animation assets unless required by compilation or integration.
-
-## WORKSPACE
-
-Unity workspace:
 `D:\OMNIVERSEL ROLEPLAY\OMNIVERSEL ROLEPLAY`
 
-Unity version: 6000.6.2f1, URP.
+Unity 6000.6.2f1 URP.
+
+Existing Joe/character FBX, valid Humanoid Avatar, existing walking clip, and existing JoeAnimator/Controller must be reused.
 
 Do not modify `Assets/Omniversel/Tests/FoundationTest.unity`.
-Do not change the project's GPU Resident Drawer setting.
+Do not change GPU Resident Drawer.
 
-## CURRENT VERIFIED ASSETS
+## ARTIFACTS TO CREATE
 
-Existing character asset under:
-`Assets/Omniversel/Characters/`
+Create exactly these three runtime scripts:
 
-The downloaded Mixamo character was originally named Joe on Mixamo, but the imported FBX/model currently has the filename/display name `character`. Treat the character identity as **Joe** while preserving existing asset references. Do not perform a risky global rename.
+- `Assets/Omniversel/Gameplay/Character/OmniverselCharacterInput.cs`
+- `Assets/Omniversel/Gameplay/Character/OmniverselCharacterController.cs`
+- `Assets/Omniversel/Gameplay/Character/OmniverselThirdPersonCamera.cs`
 
-Existing verified setup:
-- Joe/character FBX imported as Humanoid.
-- Humanoid Avatar is valid.
-- Mixamo Walking animation was downloaded without skin.
-- Walking animation uses Joe's Humanoid Avatar via Copy From Other Avatar.
-- Walking clip is set to loop.
-- Existing Animator Controller is `JoeAnimator` / `JoeAnimatorController` as currently present in the project.
-- Walking is the current default Animator state and plays successfully on Joe in Play Mode.
-- Character material extraction was attempted; materials/textures exist but visual appearance is currently unresolved. Do not make material repair a blocker for this task.
+No additional runtime scripts are authorized.
 
-## TARGET BEHAVIOUR
+These scripts use Unity's built-in legacy Input API behind one centralized input component. This keeps keyboard/mouse checks out of gameplay logic and avoids introducing a new package dependency for this minimal prototype. Unity 6 documents `Input.GetAxisRaw` as the unsmoothed virtual-axis API and notes that the newer Input System is preferred for new projects; for this prototype, the centralized input boundary is deliberate and can later be replaced without changing controller/camera contracts. citeturn5search0
 
-Implement a minimal third-person character prototype:
+## ARTIFACT 1
 
-- W/A/S/D: movement
-- Shift held: sprint
-- Space: jump
-- C held/toggled: crouch
-- Hold LMB + mouse movement: rotate third-person camera
-- RMB: context action input
-- RMB must expose a clean gameplay action hook so a future hit/attack action can be bound to it, but do NOT implement a combat system in this task.
-- Camera follows/rotates around the player in third-person.
-- Movement and animation state should be integrated with the existing Joe Animator.
-- Walking must remain functional.
-- Sprint/jump/crouch must have deterministic state handling even if dedicated animations are not yet available. Do not invent or download additional animation assets during implementation unless the approved workspace already contains them.
-- Do not add networking, multiplayer, combat, vehicles, inventory, economy, NPC AI, backend, save/load, or other gameplay systems.
+### Assets/Omniversel/Gameplay/Character/OmniverselCharacterInput.cs
 
-## IMPLEMENTATION APPROACH
+```csharp
+using UnityEngine;
 
-Prefer an existing Unity-provided/installed third-person character-controller capability or package if it is already available in the project/package manifest and can be integrated cleanly.
+namespace Omniversel.Gameplay.Character
+{
+    public sealed class OmniverselCharacterInput : MonoBehaviour
+    {
+        public Vector2 Move
+        {
+            get
+            {
+                return Vector2.ClampMagnitude(
+                    new Vector2(
+                        Input.GetAxisRaw("Horizontal"),
+                        Input.GetAxisRaw("Vertical")),
+                    1f);
+            }
+        }
 
-If no suitable installed controller exists, implement only the minimal local controller required for this task using Unity-supported APIs. Do not introduce speculative third-party frameworks, dependency injection, service locators, ECS/DOTS, or custom architecture.
+        public bool SprintHeld =>
+            Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-Input should be represented as gameplay actions rather than scattering hard-coded mouse/keyboard checks through unrelated gameplay code, so the bindings can later be replaced for controller/mobile input.
+        public bool JumpPressed => Input.GetKeyDown(KeyCode.Space);
 
-Keep camera control separate from movement and keep RMB as an action/context hook rather than hard-coding combat.
+        public bool CrouchHeld => Input.GetKey(KeyCode.C);
 
-## TEST SCENE
+        public bool CameraRotateHeld => Input.GetMouseButton(0);
 
-Use the existing:
-`Assets/Scenes/CharacterTest.unity`
+        public Vector2 LookDelta
+        {
+            get
+            {
+                if (!CameraRotateHeld)
+                {
+                    return Vector2.zero;
+                }
 
-This is a development/test scene only. Do not modify FoundationTest.
+                return new Vector2(
+                    Input.GetAxisRaw("Mouse X"),
+                    Input.GetAxisRaw("Mouse Y"));
+            }
+        }
 
-The test scene may contain the Joe character, camera, lighting, controller components, Animator Controller, and minimal test-only objects required for the prototype.
+        public bool ContextActionPressed => Input.GetMouseButtonDown(1);
+    }
+}
+```
 
-## NAMING
+## ARTIFACT 2
 
-Use Omniversel-specific names for new scripts/components. Avoid generic names that could collide later.
+### Assets/Omniversel/Gameplay/Character/OmniverselCharacterController.cs
 
-## SCOPE GUARDRAILS
+```csharp
+using System;
+using UnityEngine;
 
-Forbidden:
+namespace Omniversel.Gameplay.Character
+{
+    [RequireComponent(typeof(CharacterController))]
+    [RequireComponent(typeof(OmniverselCharacterInput))]
+    public sealed class OmniverselCharacterController : MonoBehaviour
+    {
+        [Header("References")]
+        [SerializeField] private Transform cameraTransform;
+        [SerializeField] private Animator animator;
+
+        [Header("Movement")]
+        [SerializeField] private float walkSpeed = 3.0f;
+        [SerializeField] private float sprintSpeed = 5.5f;
+        [SerializeField] private float rotationSpeed = 720.0f;
+
+        [Header("Vertical Movement")]
+        [SerializeField] private float jumpHeight = 1.2f;
+        [SerializeField] private float gravity = -20.0f;
+
+        [Header("Crouch")]
+        [SerializeField] private float standingHeight = 1.8f;
+        [SerializeField] private float crouchingHeight = 1.1f;
+
+        public event Action ContextActionRequested;
+
+        public bool IsGrounded => _characterController.isGrounded;
+        public bool IsSprinting { get; private set; }
+        public bool IsCrouching { get; private set; }
+        public float VerticalVelocity => _verticalVelocity;
+
+        private CharacterController _characterController;
+        private OmniverselCharacterInput _input;
+        private float _verticalVelocity;
+        private float _standingCenterY;
+
+        private static readonly int SpeedHash = Animator.StringToHash("Speed");
+        private static readonly int IsSprintingHash = Animator.StringToHash("IsSprinting");
+        private static readonly int IsCrouchingHash = Animator.StringToHash("IsCrouching");
+        private static readonly int GroundedHash = Animator.StringToHash("Grounded");
+        private static readonly int VerticalVelocityHash = Animator.StringToHash("VerticalVelocity");
+
+        private void Awake()
+        {
+            _characterController = GetComponent<CharacterController>();
+            _input = GetComponent<OmniverselCharacterInput>();
+
+            if (animator == null)
+            {
+                animator = GetComponentInChildren<Animator>();
+            }
+
+            if (cameraTransform == null && Camera.main != null)
+            {
+                cameraTransform = Camera.main.transform;
+            }
+
+            standingHeight = Mathf.Max(standingHeight, _characterController.radius * 2f);
+            crouchingHeight = Mathf.Clamp(
+                crouchingHeight,
+                _characterController.radius * 2f,
+                standingHeight);
+
+            if (_characterController.height > 0f)
+            {
+                standingHeight = _characterController.height;
+            }
+
+            _standingCenterY = _characterController.center.y;
+        }
+
+        private void Update()
+        {
+            UpdateCrouch();
+            UpdateMovement();
+            UpdateVerticalMovement();
+            UpdateAnimation();
+            HandleContextAction();
+        }
+
+        private void UpdateCrouch()
+        {
+            bool wantsCrouch = _input.CrouchHeld;
+
+            if (wantsCrouch)
+            {
+                SetCrouching(true);
+            }
+            else
+            {
+                SetCrouching(false);
+            }
+        }
+
+        private void SetCrouching(bool crouching)
+        {
+            if (IsCrouching == crouching)
+            {
+                return;
+            }
+
+            IsCrouching = crouching;
+
+            float targetHeight = IsCrouching ? crouchingHeight : standingHeight;
+            _characterController.height = targetHeight;
+
+            Vector3 center = _characterController.center;
+            center.y = IsCrouching
+                ? _standingCenterY - (standingHeight - targetHeight) * 0.5f
+                : _standingCenterY;
+            _characterController.center = center;
+        }
+
+        private void UpdateMovement()
+        {
+            Vector2 input = _input.Move;
+
+            if (input.sqrMagnitude <= 0.0001f)
+            {
+                IsSprinting = false;
+                return;
+            }
+
+            Vector3 forward = cameraTransform != null
+                ? cameraTransform.forward
+                : Vector3.forward;
+
+            Vector3 right = cameraTransform != null
+                ? cameraTransform.right
+                : Vector3.right;
+
+            forward.y = 0f;
+            right.y = 0f;
+
+            forward.Normalize();
+            right.Normalize();
+
+            Vector3 movement = (forward * input.y) + (right * input.x);
+            movement = Vector3.ClampMagnitude(movement, 1f);
+
+            IsSprinting = !_input.CrouchHeld && _input.SprintHeld;
+
+            float speed = IsSprinting ? sprintSpeed : walkSpeed;
+            Vector3 horizontalMotion = movement * speed;
+
+            if (movement.sqrMagnitude > 0.0001f)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(movement, Vector3.up);
+                transform.rotation = Quaternion.RotateTowards(
+                    transform.rotation,
+                    targetRotation,
+                    rotationSpeed * Time.deltaTime);
+            }
+
+            _characterController.Move(horizontalMotion * Time.deltaTime);
+        }
+
+        private void UpdateVerticalMovement()
+        {
+            if (_characterController.isGrounded)
+            {
+                if (_verticalVelocity < 0f)
+                {
+                    _verticalVelocity = -2f;
+                }
+
+                if (_input.JumpPressed && !IsCrouching)
+                {
+                    _verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                }
+            }
+
+            _verticalVelocity += gravity * Time.deltaTime;
+            _characterController.Move(
+                Vector3.up * (_verticalVelocity * Time.deltaTime));
+        }
+
+        private void UpdateAnimation()
+        {
+            if (animator == null)
+            {
+                return;
+            }
+
+            Vector2 move = _input.Move;
+            float movementAmount = Mathf.Clamp01(move.magnitude);
+
+            animator.speed = movementAmount > 0.001f
+                ? (IsSprinting ? 1.35f : 1.0f)
+                : 0f;
+
+            SetFloatIfPresent(SpeedHash, movementAmount);
+            SetBoolIfPresent(IsSprintingHash, IsSprinting);
+            SetBoolIfPresent(IsCrouchingHash, IsCrouching);
+            SetBoolIfPresent(GroundedHash, _characterController.isGrounded);
+            SetFloatIfPresent(VerticalVelocityHash, _verticalVelocity);
+        }
+
+        private void HandleContextAction()
+        {
+            if (_input.ContextActionPressed)
+            {
+                ContextActionRequested?.Invoke();
+            }
+        }
+
+        private void SetFloatIfPresent(int hash, float value)
+        {
+            if (HasParameter(hash, AnimatorControllerParameterType.Float))
+            {
+                animator.SetFloat(hash, value);
+            }
+        }
+
+        private void SetBoolIfPresent(int hash, bool value)
+        {
+            if (HasParameter(hash, AnimatorControllerParameterType.Bool))
+            {
+                animator.SetBool(hash, value);
+            }
+        }
+
+        private bool HasParameter(int hash, AnimatorControllerParameterType type)
+        {
+            foreach (AnimatorControllerParameter parameter in animator.parameters)
+            {
+                if (parameter.nameHash == hash && parameter.type == type)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+}
+```
+
+## ARTIFACT 3
+
+### Assets/Omniversel/Gameplay/Character/OmniverselThirdPersonCamera.cs
+
+```csharp
+using UnityEngine;
+
+namespace Omniversel.Gameplay.Character
+{
+    public sealed class OmniverselThirdPersonCamera : MonoBehaviour
+    {
+        [SerializeField] private Transform target;
+        [SerializeField] private float distance = 4.5f;
+        [SerializeField] private float height = 1.6f;
+        [SerializeField] private float lookHeight = 1.25f;
+        [SerializeField] private float mouseSensitivity = 3.0f;
+        [SerializeField] private float minPitch = -25.0f;
+        [SerializeField] private float maxPitch = 65.0f;
+        [SerializeField] private float followSharpness = 18.0f;
+
+        private OmniverselCharacterInput _input;
+        private float _yaw;
+        private float _pitch = 12.0f;
+
+        private void Awake()
+        {
+            if (target == null)
+            {
+                OmniverselCharacterController controller =
+                    FindFirstObjectByType<OmniverselCharacterController>();
+
+                if (controller != null)
+                {
+                    target = controller.transform;
+                }
+            }
+
+            if (target != null)
+            {
+                _input = target.GetComponent<OmniverselCharacterInput>();
+                _yaw = target.eulerAngles.y;
+            }
+        }
+
+        private void LateUpdate()
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (_input == null)
+            {
+                _input = target.GetComponent<OmniverselCharacterInput>();
+            }
+
+            if (_input != null && _input.CameraRotateHeld)
+            {
+                Vector2 look = _input.LookDelta;
+                _yaw += look.x * mouseSensitivity;
+                _pitch = Mathf.Clamp(
+                    _pitch - (look.y * mouseSensitivity),
+                    minPitch,
+                    maxPitch);
+            }
+
+            Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);
+
+            Vector3 focusPoint = target.position + Vector3.up * lookHeight;
+            Vector3 desiredPosition =
+                focusPoint
+                - (rotation * Vector3.forward * distance)
+                + (Vector3.up * (height - lookHeight));
+
+            float interpolation = 1f - Mathf.Exp(-followSharpness * Time.deltaTime);
+            transform.position = Vector3.Lerp(
+                transform.position,
+                desiredPosition,
+                interpolation);
+
+            transform.rotation = rotation;
+        }
+    }
+}
+```
+
+## EXACT SCENE INTEGRATION
+
+Use only `Assets/Scenes/CharacterTest.unity`.
+
+Do not modify `FoundationTest.unity`.
+
+### Joe / character GameObject
+
+On the existing Joe/character root GameObject that already owns the existing Animator:
+
+1. Add `CharacterController`.
+2. Add `OmniverselCharacterInput`.
+3. Add `OmniverselCharacterController`.
+4. Keep the existing Animator and existing JoeAnimator/Controller unchanged.
+5. Assign the existing Animator to `OmniverselCharacterController.animator`.
+6. Leave `cameraTransform` unassigned; the controller resolves Main Camera automatically if present.
+7. Set CharacterController:
+   - Height: 1.8
+   - Radius: 0.3
+   - Center: (0, 0.9, 0)
+   - Slope Limit: 45
+   - Step Offset: 0.3
+   - Skin Width: 0.08
+   - Min Move Distance: 0
+8. Do not add Rigidbody.
+
+### Main Camera
+
+On the existing Main Camera:
+
+1. Keep its Camera component.
+2. Add `OmniverselThirdPersonCamera`.
+3. Leave target unassigned; it resolves the existing `OmniverselCharacterController`.
+4. Keep the camera enabled.
+5. Initial runtime behavior:
+   - distance 4.5
+   - height 1.6
+   - lookHeight 1.25
+   - mouseSensitivity 3
+   - minPitch -25
+   - maxPitch 65
+   - followSharpness 18
+
+If the scene has no Main Camera, create exactly one Main Camera and add the component. Do not create additional cameras.
+
+### Animator
+
+Do not replace JoeAnimator.
+
+The existing Walking state remains the existing controller's default state.
+
+The controller only writes optional parameters if they already exist:
+- Speed (Float)
+- IsSprinting (Bool)
+- IsCrouching (Bool)
+- Grounded (Bool)
+- VerticalVelocity (Float)
+
+Therefore no Animator Controller redesign is required in this task.
+
+The existing Walking clip remains the movement animation. While there is movement, the existing Animator plays at normal speed; while sprinting, it plays at 1.35x. When stationary, the Animator is paused. This deliberately avoids inventing unavailable sprint/jump/crouch animation clips.
+
+## INPUT CONTRACT
+
+The single `OmniverselCharacterInput` component is the only location containing keyboard/mouse polling.
+
+Bindings:
+
+- Horizontal/Vertical axes: W/A/S/D through Unity's existing `Horizontal` and `Vertical` axes.
+- Left Shift or Right Shift: sprint.
+- Space: jump.
+- C: crouch while held.
+- Left mouse button held: enable camera rotation.
+- Mouse X/Y while LMB is held: camera rotation.
+- Right mouse button pressed: context-action hook.
+
+The gameplay controller and camera do not directly poll keyboard or mouse state.
+
+## RMB CONTEXT HOOK
+
+`OmniverselCharacterController.ContextActionRequested` is an instance event.
+
+This task does not subscribe combat code and does not implement attacks.
+
+QA must verify that pressing RMB invokes the event path without producing combat, weapon, damage, or hit logic.
+
+## FORBIDDEN
+
+Do not add:
 - networking/multiplayer
 - authentication/accounts
 - backend/database
 - vehicles
 - inventory/economy/shop
-- weapons/combat implementation
+- weapons/combat
 - NPC AI
 - missions/quests
-- map/world streaming
+- world streaming
 - save/load
 - chat/voice
-- monetization/admin/anti-cheat/analytics/telemetry
+- monetization/admin/anti-cheat
+- analytics/telemetry
 - mobile-specific implementation
-- Addressables/ECS/DOTS/DI/service locator
-- speculative frameworks
-- modifications to FoundationTest
+- Addressables
+- ECS/DOTS
+- DI/service locator
+- third-party controller frameworks
+- additional animation downloads
+- FoundationTest modifications
+- GPU Resident Drawer changes
+- new assemblies
 
-## VERIFICATION PLAN
+## IMPLEMENTER VERIFICATION
 
-Implementer must:
-1. Inspect the current workspace before modifying it.
-2. Reuse the existing Joe Humanoid/Animator setup.
-3. Keep all changes inside the approved character/test scope.
-4. Compile successfully.
-5. Produce a deterministic change/artifact report.
+Before reporting completion:
 
-QA must independently verify:
-- expected files/components exist
-- no forbidden systems were introduced
-- no FoundationTest modification
-- references are valid
-- compilation/static checks available to QA pass
-- input bindings and controller state transitions are present
-- camera and character-controller setup is internally consistent
+1. Confirm the three exact scripts exist at the exact paths.
+2. Confirm only CharacterTest is changed for scene integration.
+3. Confirm FoundationTest has no Git diff.
+4. Confirm existing Joe/avatar/Walking/JoeAnimator assets were reused.
+5. Confirm no forbidden systems were introduced.
+6. Confirm Unity compilation has no script errors.
+7. Confirm CharacterController and Animator references are valid.
+8. Confirm Main Camera has exactly one `OmniverselThirdPersonCamera`.
+9. Confirm no Rigidbody was added to Joe.
+10. Produce the deterministic changed-artifact report.
 
-Human Unity validation remains required for actual runtime behaviour:
-- Joe appears in CharacterTest
-- WASD moves Joe
-- Shift changes movement to sprint state/behaviour
-- Space jumps
-- C crouches
-- holding LMB and moving mouse rotates camera
-- camera follows Joe in third person
-- RMB invokes the context-action hook
-- Walking animation plays during movement
-- Play/Stop can be repeated without errors
+## QA VERIFICATION
 
-## COMPLETENESS CHECK
+QA must independently inspect actual workspace evidence and verify:
 
-Before implementation, confirm:
-- every required behaviour above has a concrete implementation location
-- existing Joe/Animator assets are reused
-- CharacterTest is the only scene intended for runtime validation
-- FoundationTest remains untouched
-- no forbidden scope is introduced
-- verification steps are executable
+- all three scripts exist and match the approved artifacts
+- no unauthorized scripts were added
+- CharacterTest changed only within this task's scope
+- FoundationTest is unchanged
+- Joe retains Humanoid Avatar and existing Animator Controller
+- no forbidden system exists
+- CharacterController configuration is valid
+- input polling is centralized in OmniverselCharacterInput
+- controller uses CharacterController.Move for movement
+- camera follows and rotates around Joe
+- RMB only raises the context-action event
+- compilation/static evidence is clean
+
+Unity's CharacterController is appropriate here because it provides collision-constrained movement through Move without requiring a Rigidbody; Unity documents that Move does not apply gravity automatically, which is why the controller explicitly applies its own deterministic gravity. citeturn1search7turn1search6
+
+## HUMAN UNITY VALIDATION
+
+After QA approval, human validation in CharacterTest:
+
+1. Enter Play Mode.
+2. Confirm Joe is visible.
+3. W/A/S/D moves Joe.
+4. Joe rotates toward movement.
+5. Shift changes to sprint speed/animation playback.
+6. Space jumps.
+7. Hold C crouches and release C restores standing height.
+8. Hold LMB and move mouse rotates the third-person camera.
+9. Camera follows Joe.
+10. RMB invokes the context-action path without combat.
+11. Walking animation plays during movement.
+12. Stop Play Mode.
+13. Enter Play Mode again.
+14. Confirm no new errors.
+
+## ACCEPTANCE
+
+The task is complete only after:
+
+**ChatGPT artifact approval → Implementer applies exact artifacts → independent QA passes → human Unity validation passes.**
+
+No local Lead, Architect, or Coder regeneration is part of this direct ChatGPT workflow.
