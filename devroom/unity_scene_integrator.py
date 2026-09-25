@@ -40,7 +40,7 @@ def ensure_script_meta(workspace, path: str) -> str:
 
 
 def _blocks(text: str):
-    return list(re.finditer(r"(?ms)^--- !u!(\\d+) &(-?\\d+)\\n.*?(?=^--- !u!|\\Z)", text))
+    return list(re.finditer(r"(?ms)^--- !u!(\d+) &(-?\d+)\n.*?(?=^--- !u!|\Z)", text))
 
 
 def _block(text: str, match) -> str:
@@ -48,7 +48,7 @@ def _block(text: str, match) -> str:
 
 
 def _field(block: str, name: str) -> str | None:
-    m = re.search(rf"(?m)^\\s*{re.escape(name)}:.*?fileID: (-?\\d+)", block)
+    m = re.search(rf"(?m)^\s*{re.escape(name)}:.*?fileID: (-?\d+)", block)
     return m.group(1) if m else None
 
 
@@ -58,7 +58,7 @@ def _object_name(block: str) -> str | None:
 
 
 def _append_component_to_gameobject(block: str, component_id: int) -> str:
-    if re.search(rf"fileID: {component_id}\\}}", block):
+    if re.search(rf"fileID: {component_id}\}}", block):
         return block
     marker = "  m_Layer:"
     insertion = f"  - component: {{fileID: {component_id}}}\n"
@@ -196,7 +196,7 @@ def integrate_character_test(workspace) -> list[str]:
                 "  crouchingHeight: 1.1\n",
             )
         )
-    if not re.search(r"(?m)^CharacterController:\\n", scene):
+    if not re.search(r"(?m)^CharacterController:\n", scene):
         cc_id = next_id; next_id += 1
         joe_block = _append_component_to_gameobject(joe_block, cc_id)
         created_blocks.append(_character_controller_block(cc_id, joe_id))
