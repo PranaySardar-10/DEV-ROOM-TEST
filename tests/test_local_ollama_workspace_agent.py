@@ -63,7 +63,7 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
             urlopen.return_value.__enter__.return_value = response
             LocalOllamaWorkspaceAgent(model="gemma4:e4b")._generate_structured("test")
             body = json.loads(urlopen.call_args.args[0].data.decode("utf-8"))
-            self.assertEqual(body["options"]["num_predict"], 4096)
+            self.assertEqual(body["options"]["num_predict"], 16384)
 
     def test_custom_generation_budget_is_sent(self):
         with patch("devroom.local_ollama_workspace_agent.urllib.request.urlopen") as urlopen:
@@ -97,6 +97,43 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
                     ),
                     workspace,
                 )
+
+    def test_directory_scope_allows_nested_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = LocalWorkspaceProvider(directory)
+            agent = LocalOllamaWorkspaceAgent(model="gemma4:e4b")
+            with patch.object(
+                agent,
+                "_generate_structured",
+                return_value={
+                    "summary": "created nested file",
+                    "files": [
+                        {
+                            "path": "Assets/Omniversel/Core/example.txt",
+                            "content": "ok",
+                        }
+                    ],
+                },
+            ):
+                result = agent.execute_in_workspace(
+                    AgentTask(
+                        "Implementer",
+                        "Create a nested file",
+                        {
+                            "sandbox": WORKSPACE_WRITE,
+                            "allowed_paths": "Assets/Omniversel",
+                        },
+                    ),
+                    workspace,
+                )
+            self.assertEqual(
+                workspace.read_file("Assets/Omniversel/Core/example.txt"),
+                "ok",
+            )
+            self.assertEqual(
+                result.artifacts,
+                ("Assets/Omniversel/Core/example.txt",),
+            )
 
     @patch("devroom.local_ollama_workspace_agent.urllib.request.urlopen")
     def test_implementer_uses_structured_ollama_api(self, urlopen):
