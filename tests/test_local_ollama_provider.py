@@ -28,8 +28,10 @@ class LocalOllamaProviderTests(unittest.TestCase):
         self.assertEqual(command[0], "curl.exe")
         self.assertEqual(command[1], "-sN")
         self.assertEqual(command[-1], "@-")
-        self.assertEqual(run.call_args.kwargs["input_data"], run.call_args.kwargs["input_data"])
-        payload = json.loads(run.call_args.kwargs["input_data"])
+        input_data = run.call_args.kwargs["input_data"]
+        self.assertIsInstance(input_data, bytes)
+        self.assertNotIn(input_data.decode("utf-8"), command)
+        payload = json.loads(input_data)
         self.assertEqual(payload["model"], "gemma4:e4b")
         self.assertFalse(payload["think"])
         self.assertTrue(payload["stream"])
