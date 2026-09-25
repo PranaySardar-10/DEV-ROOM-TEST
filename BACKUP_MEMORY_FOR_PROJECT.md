@@ -1061,3 +1061,46 @@ Current project status:
 - The direct ChatGPT implementation path is no longer merely structural; it has completed a real end-to-end GAME-FOUNDATION-001 workflow successfully.
 - The next sensible action is to manually open the Unity project and independently inspect the generated foundation before treating the Unity foundation itself as fully validated outside the CLI workflow. This includes opening `FoundationTest.unity`, checking the one-root scene structure, entering Play Mode, verifying the exact log `Omniversel Foundation initialized`, exiting and entering Play Mode again, and checking for compile/runtime errors.
 - After manual Unity inspection, update the backup again with the observed Unity result before making a merge/promotion decision for PR #8.
+
+
+## 36. 2026-09-25 — UNITY FOUNDATION MANUAL VALIDATION CONFIRMED; FACTORY MILESTONE COMPLETED
+
+The successful GAME-FOUNDATION-001 workflow was followed by direct manual inspection in Unity 6000.6.2f1.
+
+Human Unity validation observations:
+- `FoundationTest.unity` opened successfully in the Omniversel Roleplay Unity project.
+- Hierarchy showed the expected single `OmniverselFoundation` root object.
+- The Game view displayed `No cameras rendering`, which is expected because the foundation task intentionally requires no camera.
+- Play Mode started successfully.
+- Console showed the exact bootstrap message:
+  `Omniversel Foundation initialized`
+- Unity showed **0 errors** during the observed Play Mode run.
+- One unrelated shader warning was visible concerning Edge Adaptive Spatial Upsampling; it was not an error and was outside the foundation implementation.
+- Play Mode could be stopped normally.
+- A subsequent Play Mode start again produced the expected behavior; the apparent visual duplication/freezing was confirmed to be limited to the Game view because Unity itself remained responsive and Play Mode could be stopped normally.
+- No camera was added, because adding one would violate the required minimal foundation scene.
+
+This confirms the important manual runtime behavior of the generated foundation: Unity can enter Play Mode, execute FoundationBootstrap, emit the required initialization log, and exit normally without foundation runtime errors.
+
+### FACTORY MILESTONE
+
+The project has now reached the intended major DevRoom factory milestone:
+
+**DevRoom orchestration factory has been built, hardened, exercised, and used successfully to produce and manually validate the first Omniversel Roleplay Unity foundation.**
+
+Proven production chain:
+**ChatGPT architecture + coding → Human approval → constrained Implementer → independent QA → Human Unity validation → complete.**
+
+Validation milestones now recorded:
+- Deterministic DevRoom suite: **143/143 tests — OK** before the successful production run.
+- GAME-FOUNDATION-001: successful end-to-end workflow.
+- Implementer: 11 approved artifacts applied.
+- QA stage reached successfully.
+- Human Unity validation gate approved.
+- Direct manual Unity inspection confirmed the expected scene structure and bootstrap runtime behavior.
+
+The factory should now be treated as a **validated production foundation**, while PR #8 remains an experimental branch that still requires an explicit human decision before promotion/merge.
+
+Important next decision:
+- Do not immediately modify the validated foundation just because the factory milestone is complete.
+- First preserve this state in Git/backup and then decide deliberately whether PR #8 should be promoted/merged and whether this direct ChatGPT implementation workflow should become the normal production path.
