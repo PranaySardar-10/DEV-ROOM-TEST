@@ -947,3 +947,59 @@ Important validation status:
 - These latest simplification changes have been committed to the development branch but have NOT yet been run through the user's local 136+ deterministic test suite.
 - Do not claim the suite is green until the user pulls/runs the updated branch.
 - PR #7 remains open/unmerged and requires explicit human approval before merge.
+
+## 34. 2026-09-25 — CHATGPT DIRECT IMPLEMENTATION EXPERIMENT CREATED
+
+After the latest real GAME-FOUNDATION-001 run continued to fail because the local Coder repeatedly produced incomplete implementation proposals, the project direction was experimentally simplified.
+
+Key design realization:
+- ChatGPT can perform the architecture and coding reasoning directly.
+- The local Coder role was acting as an unnecessary translation layer: it had to convert architecture into a complete proposal, and the small local model repeatedly failed at completion.
+- The preferred experimental flow is now:
+  **ChatGPT architecture + coding → Human approval → constrained Implementer → independent QA → Human Unity validation.**
+- This is an experiment only. The existing production Lead/Architect/Coder workflow remains intact until the experiment is proven.
+
+Experimental Git state:
+- New branch: `devroom/chatgpt-implementer-qa-experiment`
+- Base: PR #7 head `9fc97500055c5ebeae15fa44d165045077fa06f1`.
+- Draft PR #8: `experiment: ChatGPT direct implementation workflow`
+- PR #8 is open, draft, unmerged, and must not be merged until the experiment is validated.
+- PR URL: https://github.com/PranaySardar-10/DEV-ROOM-TEST/pull/8
+
+Experimental code changes:
+- `devroom/orchestrator.py` now has an optional direct `implementation_plan` path. When supplied, it skips local Lead/Architect/Coder and enters the existing Human Review gate.
+- After human approval, the existing constrained Implementer runs, then independent QA receives actual workspace evidence, followed by Human Unity Validation.
+- Existing normal workflow is unchanged when `implementation_plan` is not supplied.
+- `devroom/cli.py` now accepts:
+  `--implementation-plan-file`
+  for the experimental direct ChatGPT path.
+- Added deterministic orchestration coverage in `tests/test_orchestrator.py` proving the direct path invokes only Implementer and QA before Unity validation.
+- No automatic merge or production replacement was performed.
+
+ChatGPT-authored GAME-FOUNDATION-001 implementation plan:
+- Added:
+  `experiments/GAME-FOUNDATION-001.chatgpt-plan.md`
+- The plan contains concrete asmdef definitions/dependencies, FoundationBootstrap code, deterministic test-scene structure, fixed script/scene metadata requirements, forbidden-scope constraints, and verification requirements.
+- The plan is intended to be human-reviewed before the Implementer is allowed to modify the Unity workspace.
+
+Experimental branch comparison:
+- Relative to PR #7 head `9fc97500055c5ebeae15fa44d165045077fa06f1`, the experiment currently contains 4 commits and 4 changed files.
+- The branch head is `f3130997295ee1f7fbae919c1df140340b466944`.
+- The four changed files are:
+  - `devroom/cli.py`
+  - `devroom/orchestrator.py`
+  - `tests/test_orchestrator.py`
+  - `experiments/GAME-FOUNDATION-001.chatgpt-plan.md`
+
+Validation status:
+- The experiment has been structurally created, but its full deterministic test suite has NOT yet been run in the user's local checkout.
+- GitHub Actions had no workflow run reported for the experiment branch at the time of creation.
+- Therefore do not claim the experimental path is validated yet.
+- Next step is to pull `devroom/chatgpt-implementer-qa-experiment`, run the full deterministic suite, then run GAME-FOUNDATION-001 through the direct ChatGPT plan path.
+- Human Unity validation has not yet been reached for this experiment.
+- PR #8 must remain unmerged until the experiment demonstrates the desired behavior.
+
+Important continuity decision:
+- The historical `backup/starting-memory-game-development-2026-09-24` branch remains untouched.
+- This live backup branch remains the ongoing project memory and must continue to receive meaningful DevRoom/Omniversel progress updates.
+
