@@ -42,7 +42,7 @@ class LocalOllamaWorkspaceAgent:
     stall_timeout_seconds: int = 1800
     timeout_seconds: int = 600
     api_url: str = "http://localhost:11434/api/generate"
-    num_predict: int = 4096
+    num_predict: int = 16384
 
     def __post_init__(self) -> None:
         if self.stall_timeout_seconds <= 0:
@@ -63,7 +63,11 @@ class LocalOllamaWorkspaceAgent:
             raise ValueError("Ollama model must not be blank.")
 
         allowed_raw = task.context.get("allowed_paths", "")
-        allowed = {item.strip().replace("\\", "/") for item in allowed_raw.split(",") if item.strip()}
+        allowed = {
+            self._normalize_path(item)
+            for item in allowed_raw.split(",")
+            if item.strip()
+        }
         if not allowed:
             raise ValueError("Implementer requires an explicit allowed_paths scope.")
 
@@ -78,9 +82,9 @@ class LocalOllamaWorkspaceAgent:
         for item in files:
             if not isinstance(item, dict):
                 raise RuntimeError("Every file change must be an object.")
-            relative_path = str(item.get("path", "")).replace("\\", "/").strip()
+            relative_path = self._normalize_path(str(item.get("path", "")))
             content = item.get("content")
-            if relative_path not in allowed:
+            if not self._path_is_allowed(relative_path, allowed):
                 raise PermissionError(
                     f"Implementer attempted to modify a path outside its approved scope: {relative_path!r}"
                 )
@@ -148,7 +152,10 @@ class LocalOllamaWorkspaceAgent:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=max(self.stall_timeout_seconds, self.timeout_seconds)) as response:
+            with urllib.request.urlopen(
+                request,
+                timeout=max(self.stall_timeout_seconds, self.timeout_seconds),
+            ) as response:
                 raw = response.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace").strip()
@@ -161,7 +168,8 @@ class LocalOllamaWorkspaceAgent:
             ) from exc
         except TimeoutError as exc:
             raise TimeoutError(
-                f"Local Ollama model {self.model!r} timed out after {max(self.stall_timeout_seconds, self.timeout_seconds)}s."
+                f"Local Ollama model {self.model!r} timed out after "
+                f"{max(self.stall_timeout_seconds, self.timeout_seconds)}s."
             ) from exc
 
         try:
@@ -187,11 +195,29 @@ class LocalOllamaWorkspaceAgent:
 
         raise RuntimeError(
             "Ollama API returned no valid JSON artifact payload; "
-            "no workspace files were changed."
+            "no workspace files were changed. "
+            "The Implementer may have exhausted its output budget before completing the artifact."
         )
 
     @staticmethod
-    def _build_prompt(task: AgentTask, allowed: set[str], workspace: LocalWorkspaceProvider) -> str:
+    def _normalize_path(path: str) -> str:
+        return path.replace("\\", "/").strip().strip("/")
+
+    @classmethod
+    def _path_is_allowed(cls, path: str, allowed: set[str]) -> bool:
+        normalized = cls._normalize_path(path)
+        return any(
+            normalized == scope or normalized.startswith(scope + "/")
+            for scope in allowed
+        )
+
+    @classmethod
+    def _build_prompt(
+        cls,
+        task: AgentTask,
+        allowed: set[str],
+        workspace: LocalWorkspaceProvider,
+    ) -> str:
         relevant_keys = {
             "approved_proposal",
             "architecture_summary",
@@ -207,15 +233,27 @@ class LocalOllamaWorkspaceAgent:
             if key in task.context
         )
         source_files: list[str] = []
-        for relative_path in sorted(allowed):
+        existing_files: list[str] = []
+        try:
+            inspection = workspace.inspect()
+            existing_files = [
+                str(path).replace("\\", "/")
+                for path in inspection["files"]
+                if cls._path_is_allowed(str(path), allowed)
+            ]
+        except (FileNotFoundError, OSError):
+            existing_files = []
+
+        for relative_path in sorted(existing_files):
             try:
                 content = workspace.read_file(relative_path)
             except FileNotFoundError:
-                content = "<file does not exist yet>"
+                continue
             source_files.append(
                 f"FILE {relative_path}\nBEGIN CURRENT CONTENT\n{content}\nEND CURRENT CONTENT"
             )
-        source = "\n\n".join(source_files)
+
+        source = "\n\n".join(source_files) or "<no existing files in approved scope>"
         scope = ", ".join(sorted(allowed))
         return (
             "You are the DevRoom production Implementer.\n"
@@ -229,7 +267,9 @@ class LocalOllamaWorkspaceAgent:
             f"{source}\n\n"
             "Return only the approved implementation artifact. The response is enforced "
             "against a JSON schema. Return complete replacement content for every file "
-            "you modify. Every path must be one of the approved paths."
+            "you modify. Every path must be inside one of the approved scope directories "
+            "or equal an explicitly approved file path. "
+            "Do not return markdown fences or explanatory text outside the JSON artifact."
         )
 
     @staticmethod
