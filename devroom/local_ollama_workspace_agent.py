@@ -128,10 +128,10 @@ class LocalOllamaWorkspaceAgent:
         written: list[str] = []
         generated_paths: list[str] = []
         if direct_scene_required:
-            scene_path = "Assets/Scenes/CharacterTest.unity"
+            scene_path = "Assets/Scenes/Character Test.unity"
             if not self._path_is_allowed(scene_path, allowed):
                 raise PermissionError(
-                    "Direct CharacterTest integration requires Assets/Scenes/CharacterTest.unity "
+                    "Direct CharacterTest integration requires Assets/Scenes/Character Test.unity "
                     "to be inside the Implementer allowed_paths scope."
                 )
             generated_paths = [
