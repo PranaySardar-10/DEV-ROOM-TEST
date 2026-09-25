@@ -609,5 +609,38 @@ Do not report completion early.
             DevRoomOrchestrator(provider).run("Goal", allowed_paths=("",))
 
 
+    def test_direct_chatgpt_plan_skips_local_planning_roles(self) -> None:
+        provider = MockProvider()
+        plan = (
+            "Create the foundation files exactly as specified by GAME-FOUNDATION-001. "
+            "Use only the approved Assets/Omniversel scope and do not add gameplay systems."
+        )
+        result = DevRoomOrchestrator(provider).run(
+            "Create the minimal, deterministic Omniversel Roleplay Unity project foundation.",
+            workspace=r"D:\OMNIVERSEL ROLEPLAY\OMNIVERSEL ROLEPLAY",
+            allowed_paths=("Assets/Omniversel",),
+            specification="# Objective\nBuild foundation.",
+            implementation_plan=plan,
+            human_gate=self.approve_all,
+        )
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            result.history,
+            [
+                Stage.HUMAN_REVIEW,
+                Stage.IMPLEMENTER,
+                Stage.QA,
+                Stage.UNITY_VALIDATION,
+                Stage.COMPLETE,
+            ],
+        )
+        self.assertEqual(
+            [task.role for task in provider.calls],
+            ["Implementer", "QA"],
+        )
+        self.assertEqual(provider.calls[0].context["approved_proposal"], plan)
+        self.assertEqual(provider.calls[1].context["approved_proposal"], plan)
+
+
 if __name__ == "__main__":
     unittest.main()
