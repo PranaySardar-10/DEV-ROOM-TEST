@@ -113,7 +113,7 @@ def _character_controller_block(file_id: int, game_object_id: int) -> str:
 
 
 def integrate_character_test(workspace) -> list[str]:
-    scene_path = "Assets/Scenes/CharacterTest.unity"
+    scene_path = "Assets/Scenes/Character Test.unity"
     scene = workspace.read_file(scene_path)
     ids = [int(m.group(2)) for m in _blocks(scene)]
     next_id = max(ids + [1000]) + 1
