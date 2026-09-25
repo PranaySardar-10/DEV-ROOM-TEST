@@ -420,9 +420,9 @@ namespace Omniversel.Gameplay.Character
 
 The scene wiring is **not documentation-only**. The Implementer must make a real serialized change to:
 
-`Assets/Scenes/CharacterTest.unity`
+`Assets/Scenes/Character Test.unity`
 
-The task MUST NOT be reported as implemented if the three scripts exist but CharacterTest.unity has not changed.
+The task MUST NOT be reported as implemented if the three scripts exist but Character Test.unity has not changed.
 
 ### Required serialized scene result
 
@@ -447,7 +447,7 @@ The Implementer must resolve the actual fileIDs and script GUIDs from the worksp
 After creating the three scripts:
 
 1. Read the generated `.cs.meta` files and use their actual GUIDs for the MonoBehaviour script references.
-2. Read `Assets/Scenes/CharacterTest.unity`.
+2. Read `Assets/Scenes/Character Test.unity`.
 3. Identify the existing Joe/character root by locating the GameObject that owns the existing Animator component and the JoeAnimator controller.
 4. Identify the existing Main Camera by its GameObject name/tag and existing Camera component.
 5. Add the required CharacterController component to the Joe root with the exact values specified below.
@@ -455,9 +455,9 @@ After creating the three scripts:
 7. Add OmniverselCharacterController to the Joe root and serialize its Animator reference to the existing Joe Animator. Leave cameraTransform null.
 8. Add OmniverselThirdPersonCamera to the existing Main Camera and serialize its target reference to the Joe root. Use the exact camera defaults specified below.
 9. Preserve all unrelated serialized scene data byte-for-byte where practical; do not recreate the scene.
-10. Save the resulting `CharacterTest.unity`.
+10. Save the resulting `Character Test.unity`.
 11. Verify that the resulting YAML contains references to all three new script GUIDs and that the Joe/Main Camera component lists contain the expected components.
-12. The Implementer result MUST list `Assets/Scenes/CharacterTest.unity` as an applied artifact.
+12. The Implementer result MUST list `Assets/Scenes/Character Test.unity` as an applied artifact.
 
 ### Required implementation artifact set
 
@@ -466,13 +466,13 @@ The successful implementation must report at least these four artifacts:
 - `Assets/Omniversel/Gameplay/Character/OmniverselCharacterInput.cs`
 - `Assets/Omniversel/Gameplay/Character/OmniverselCharacterController.cs`
 - `Assets/Omniversel/Gameplay/Character/OmniverselThirdPersonCamera.cs`
-- `Assets/Scenes/CharacterTest.unity`
+- `Assets/Scenes/Character Test.unity`
 
-If CharacterTest.unity is not actually modified, the Implementer must report failure instead of claiming completion.
+If Character Test.unity is not actually modified, the Implementer must report failure instead of claiming completion.
 
 ## EXACT SCENE INTEGRATION
 
-Use only `Assets/Scenes/CharacterTest.unity`.
+Use only `Assets/Scenes/Character Test.unity`.
 
 Do not modify `FoundationTest.unity`.
 
