@@ -127,7 +127,7 @@ using UnityEngine;
             workspace = LocalWorkspaceProvider(directory)
             agent = LocalOllamaWorkspaceAgent(model="gemma4:e4b")
             with patch.object(
-                agent,
+                LocalOllamaWorkspaceAgent,
                 "_generate_structured",
                 return_value={
                     "summary": "created nested file",
