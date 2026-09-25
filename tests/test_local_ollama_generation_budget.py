@@ -25,8 +25,6 @@ class LocalOllamaGenerationBudgetTests(unittest.TestCase):
         def fake_runner(command, *, input_data, stall_timeout_seconds):
             captured["command"] = command
             captured["input_data"] = input_data
-            captured["input_data"] = input_data
-            captured["input_data"] = input_data
             return type("Completed", (), {
                 "returncode": 0,
                 "stdout": '{"message":{"content":"complete proposal"}}\n{"done":true}\n',
@@ -48,6 +46,7 @@ class LocalOllamaGenerationBudgetTests(unittest.TestCase):
 
         def fake_runner(command, *, input_data, stall_timeout_seconds):
             captured["command"] = command
+            captured["input_data"] = input_data
             return type("Completed", (), {
                 "returncode": 0,
                 "stdout": '{"message":{"content":"proposal"}}\n',
