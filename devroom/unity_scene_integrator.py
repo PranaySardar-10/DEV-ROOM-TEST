@@ -123,17 +123,30 @@ def integrate_character_test(workspace) -> list[str]:
     # This character is an imported FBX/model prefab instance, so its Animator
     # and root GameObject are not serialized as ordinary scene-local objects.
     matches = _blocks(scene)
-    prefab_matches = [
-        m for m in matches
-        if m.group(1) == "1001" and f"guid: c8b4ee65ffebe3e468cfd4b9bc2777f4" in _block(scene, m)
-    ]
-    if len(prefab_matches) != 1:
+    character_guid = "c8b4ee65ffebe3e468cfd4b9bc2777f4"
+    # Locate the model PrefabInstance from its explicit m_SourcePrefab line.
+    # Do not depend on the generic YAML block parser for prefab blocks: Unity's
+    # PrefabInstance serialization can contain nested structures that make a
+    # broad block regex unreliable.
+    prefab_header = re.compile(
+        r"(?ms)^--- !u!1001 &(-?\\d+)\\nPrefabInstance:\\n.*?"
+        r"(?=^--- !u!|\\Z)"
+    )
+    prefab_candidates = []
+    for pm in prefab_header.finditer(scene):
+        pblock = pm.group(0)
+        if re.search(
+            rf"(?m)^  m_SourcePrefab: \\{{fileID: 100100000, guid: {re.escape(character_guid)}, type: 3\\}}$",
+            pblock,
+        ):
+            prefab_candidates.append(pm)
+    if len(prefab_candidates) != 1:
         raise RuntimeError(
             "Character Test.unity must contain exactly one character FBX PrefabInstance "
-            "(guid c8b4ee65ffebe3e468cfd4b9bc2777f4)."
+            f"(guid {character_guid})."
         )
 
-    prefab_match = prefab_matches[0]
+    prefab_match = prefab_candidates[0]
     prefab_id = int(prefab_match.group(2))
     prefab_block = _block(scene, prefab_match)
 
@@ -169,7 +182,10 @@ def integrate_character_test(workspace) -> list[str]:
     prefab_match = next(
         m for m in matches
         if m.group(1) == "1001"
-        and f"guid: c8b4ee65ffebe3e468cfd4b9bc2777f4" in _block(scene, m)
+        and re.search(
+            rf"(?m)^  m_SourcePrefab: \\{{fileID: 100100000, guid: {re.escape(character_guid)}, type: 3\\}}$",
+            _block(scene, m),
+        )
     )
     prefab_id = int(prefab_match.group(2))
     camera_matches = [m for m in matches if m.group(1) == "20"]
@@ -316,7 +332,10 @@ def integrate_character_test(workspace) -> list[str]:
         prefab_match = next(
             m for m in _blocks(scene)
             if m.group(1) == "1001"
-            and f"guid: c8b4ee65ffebe3e468cfd4b9bc2777f4" in _block(scene, m)
+            and re.search(
+                rf"(?m)^  m_SourcePrefab: \\{{fileID: 100100000, guid: {re.escape(character_guid)}, type: 3\\}}$",
+                _block(scene, m),
+            )
         )
         scene = _add_prefab_components(scene, prefab_match, added_entries)
 
