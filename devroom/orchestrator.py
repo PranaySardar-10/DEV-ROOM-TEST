@@ -408,15 +408,27 @@ class DevRoomOrchestrator:
             files = "\n".join(str(path) for path in inspection["files"])
             git_status = "\n".join(str(item) for item in inspection["git"])
             allowed = ", ".join(str(path) for path in allowed_paths) or "<none>"
+            actual_files = tuple(str(path) for path in inspection["files"])
             contents: list[str] = []
-            for relative_path in allowed_paths:
-                try:
-                    content = provider.read_file(str(relative_path))
-                except FileNotFoundError:
-                    content = "<FILE NOT FOUND>"
-                contents.append(
-                    f"FILE {relative_path}\nBEGIN ACTUAL CONTENT\n{content}\nEND ACTUAL CONTENT"
-                )
+            for scope in allowed_paths:
+                normalized_scope = str(scope).replace("\\\\", "/").strip("/")
+                matching_files = [
+                    path for path in actual_files
+                    if path == normalized_scope or path.startswith(normalized_scope + "/")
+                ]
+                if not matching_files:
+                    contents.append(
+                        f"FILE {scope}\\nBEGIN ACTUAL CONTENT\\n<FILE NOT FOUND>\\nEND ACTUAL CONTENT"
+                    )
+                    continue
+                for relative_path in matching_files:
+                    try:
+                        content = provider.read_file(relative_path)
+                    except FileNotFoundError:
+                        content = "<FILE NOT FOUND>"
+                    contents.append(
+                        f"FILE {relative_path}\\nBEGIN ACTUAL CONTENT\\n{content}\\nEND ACTUAL CONTENT"
+                    )
             return {
                 "workspace_evidence": (
                     f"WORKSPACE: {inspection['workspace']}\n"
