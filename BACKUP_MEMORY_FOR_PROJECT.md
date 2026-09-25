@@ -1003,3 +1003,61 @@ Important continuity decision:
 - The historical `backup/starting-memory-game-development-2026-09-24` branch remains untouched.
 - This live backup branch remains the ongoing project memory and must continue to receive meaningful DevRoom/Omniversel progress updates.
 
+
+
+## 35. 2026-09-25 — CHATGPT DIRECT IMPLEMENTATION EXPERIMENT: FIRST END-TO-END SUCCESS
+
+The direct ChatGPT implementation experiment has now completed its first successful GAME-FOUNDATION-001 end-to-end workflow.
+
+Key workflow proven:
+**ChatGPT architecture + coding → Human Review approval → constrained Implementer → independent QA → Human Unity Validation approval → COMPLETE.**
+
+Important implementation/factory fixes made before the successful run:
+- Implementer default generation budget increased from 4096 to 16384 for workspace implementation tasks.
+- Directory-scoped allowed paths were fixed so nested files under `Assets/Omniversel` are permitted.
+- In the direct ChatGPT experiment, the approved ChatGPT plan is now parsed deterministically into file artifacts instead of asking a small local model to regenerate the already-approved implementation plan as JSON.
+- Deterministic extraction test added for approved ChatGPT plans.
+- Frozen-dataclass test mocking issue fixed.
+- QA evidence collection was fixed to expand directory scopes against actual files instead of attempting to read a directory as a file.
+- Ollama request transport was fixed for large payloads: JSON is now sent through stdin using `curl.exe --data-binary @-` rather than placing the entire payload on the Windows command line. This resolved the observed WinError 206 command-length failure.
+- Process runner now supports stdin payloads while retaining stdout/stderr draining and stall detection.
+- Generation-budget tests were updated for stdin payloads.
+
+Deterministic validation before the successful production run:
+- Full local suite reached **143 tests, 0 failures, 0 errors — OK**.
+
+Successful GAME-FOUNDATION-001 run:
+- Correct Unity workspace used:
+  `D:\\OMNIVERSEL ROLEPLAY\\OMNIVERSEL ROLEPLAY`
+- Human Review displayed the ChatGPT-authored implementation plan and the user entered `approve`.
+- Implementer reported:
+  `Applied 11 file artifact(s) from the approved ChatGPT plan.`
+- The 11 artifacts correspond to the seven required asmdefs, FoundationBootstrap.cs and its metadata, and FoundationTest.unity and its metadata.
+- Workflow reached QA after implementation.
+- Workflow then reached the Human Unity Validation gate.
+- User approved the final Unity validation gate.
+- Final CLI result:
+  `DevRoom finished: complete`
+
+Evidence from the successful terminal run is preserved in the conversation upload `Pasted text(20260925-060125).txt`; the implementation approval/application appears around lines 326-335 and the final Unity validation approval/completion around lines 331-365.
+
+Important qualification:
+- The terminal output shown in the captured run contains abbreviated QA evidence rather than the full eight-line QA PASS/FAIL report, so do not independently claim every individual QA field was visually verified from that output.
+- What is established is that the workflow passed through the QA stage to Human Unity Validation, and the human approved the final Unity validation gate.
+- The human Unity validation approval is a workflow gate approval; it is not a substitute for recording detailed manual observations if future audits require them.
+
+Incident during this milestone:
+- One attempted run used the mistyped workspace path `D:\\OMNIVERSAL ROLEPLAY\\OMNIVERSAL ROLEPLAY` and failed before implementation because the workspace did not exist.
+- No project files were modified by that failed attempt.
+- The corrected path was then used for the successful run.
+
+Current experimental Git state:
+- PR #8: `experiment: ChatGPT direct implementation workflow`
+- Branch: `devroom/chatgpt-implementer-qa-experiment`
+- PR #8 remains **open, draft, and unmerged**.
+- Do NOT merge PR #8 until the human explicitly decides to promote the experiment.
+
+Current project status:
+- The direct ChatGPT implementation path is no longer merely structural; it has completed a real end-to-end GAME-FOUNDATION-001 workflow successfully.
+- The next sensible action is to manually open the Unity project and independently inspect the generated foundation before treating the Unity foundation itself as fully validated outside the CLI workflow. This includes opening `FoundationTest.unity`, checking the one-root scene structure, entering Play Mode, verifying the exact log `Omniversel Foundation initialized`, exiting and entering Play Mode again, and checking for compile/runtime errors.
+- After manual Unity inspection, update the backup again with the observed Unity result before making a merge/promotion decision for PR #8.
