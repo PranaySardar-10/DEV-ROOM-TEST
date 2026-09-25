@@ -385,6 +385,26 @@ Do not report completion early.
             self.assertIn("DEVROOM_SMOKE_TEST_OK", evidence)
             self.assertIn("ACTUAL GIT STATUS:", evidence)
 
+    def test_qa_reads_files_inside_directory_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            target = workspace / "Assets" / "Omniversel" / "Bootstrap" / "FoundationBootstrap.cs"
+            target.parent.mkdir(parents=True)
+            target.write_text("Debug.Log(\\\"Omniversel Foundation initialized\\\");", encoding="utf-8")
+            provider = MockProvider()
+            result = DevRoomOrchestrator(provider).run(
+                "Validate foundation files",
+                workspace=str(workspace),
+                allowed_paths=("Assets/Omniversel",),
+                human_gate=self.approve_all,
+            )
+            self.assertEqual(result.stage, Stage.COMPLETE)
+            qa_tasks = [task for task in provider.calls if task.role == "QA"]
+            self.assertEqual(len(qa_tasks), 1)
+            evidence = qa_tasks[0].context["workspace_evidence"]
+            self.assertIn("FILE Assets/Omniversel/Bootstrap/FoundationBootstrap.cs", evidence)
+            self.assertIn("Omniversel Foundation initialized", evidence)
+
     def test_persists_final_workflow_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.json"
