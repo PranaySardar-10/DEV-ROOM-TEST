@@ -9,6 +9,7 @@ from typing import Any
 from .orchestrator import AgentResult, AgentTask
 from .sandbox_policy import WORKSPACE_WRITE
 from .workspace_provider import LocalWorkspaceProvider
+from .unity_scene_integrator import integrate_character_test
 
 
 ARTIFACT_SCHEMA: dict[str, Any] = {
@@ -89,6 +90,13 @@ class LocalOllamaWorkspaceAgent:
         if not isinstance(files, list) or not files:
             raise RuntimeError("Implementer response contained no file changes.")
 
+        direct_scene_required = (
+            task.context.get("plan_source")
+            == "ChatGPT direct architecture + coding experiment"
+            and isinstance(approved_plan, str)
+            and "SCENE FILE IS A REQUIRED IMPLEMENTATION ARTIFACT" in approved_plan
+        )
+
         validated: list[tuple[str, str]] = []
         seen: set[str] = set()
         for item in files:
@@ -118,10 +126,37 @@ class LocalOllamaWorkspaceAgent:
             )
 
         written: list[str] = []
+        generated_paths: list[str] = []
+        if direct_scene_required:
+            scene_path = "Assets/Scenes/CharacterTest.unity"
+            if not self._path_is_allowed(scene_path, allowed):
+                raise PermissionError(
+                    "Direct CharacterTest integration requires Assets/Scenes/CharacterTest.unity "
+                    "to be inside the Implementer allowed_paths scope."
+                )
+            generated_paths = [
+                scene_path,
+                "Assets/Omniversel/Gameplay/Character/OmniverselCharacterInput.cs.meta",
+                "Assets/Omniversel/Gameplay/Character/OmniverselCharacterController.cs.meta",
+                "Assets/Omniversel/Gameplay/Character/OmniverselThirdPersonCamera.cs.meta",
+            ]
+            for path in generated_paths:
+                if path not in original_contents:
+                    target = workspace._safe_path(path)
+                    original_contents[path] = (
+                        target.read_text(encoding="utf-8") if target.exists() else None
+                    )
+
         try:
             for relative_path, content in validated:
                 workspace.write_file(relative_path, content)
                 written.append(relative_path)
+
+            if direct_scene_required:
+                integrated = integrate_character_test(workspace)
+                for path in integrated:
+                    if path not in written:
+                        written.append(path)
         except Exception as exc:
             try:
                 for relative_path, original in original_contents.items():
@@ -139,7 +174,7 @@ class LocalOllamaWorkspaceAgent:
             raise
 
         summary = str(payload.get("summary", "")).strip() or (
-            f"Implemented {len(written)} approved file(s)."
+            f"Implemented {len(written)} approved artifact(s)."
         )
         return AgentResult(
             role=task.role,
