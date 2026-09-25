@@ -71,8 +71,20 @@ class LocalOllamaWorkspaceAgent:
         if not allowed:
             raise ValueError("Implementer requires an explicit allowed_paths scope.")
 
-        prompt = self._build_prompt(task, allowed, workspace)
-        payload = self._generate_structured(prompt)
+        # The direct ChatGPT experiment already provides the approved implementation
+        # as the source artifact. In that path, the Implementer is an executor, not
+        # another code-generating model. Parse the approved plan deterministically so
+        # a small local model cannot truncate or corrupt the implementation artifact.
+        approved_plan = task.context.get("approved_proposal")
+        if (
+            task.context.get("plan_source")
+            == "ChatGPT direct architecture + coding experiment"
+            and isinstance(approved_plan, str)
+        ):
+            payload = self._payload_from_approved_plan(approved_plan)
+        else:
+            prompt = self._build_prompt(task, allowed, workspace)
+            payload = self._generate_structured(prompt)
         files = payload.get("files")
         if not isinstance(files, list) or not files:
             raise RuntimeError("Implementer response contained no file changes.")
@@ -134,6 +146,70 @@ class LocalOllamaWorkspaceAgent:
             summary=summary,
             artifacts=tuple(written),
         )
+
+    @classmethod
+    def _payload_from_approved_plan(cls, plan: str) -> dict[str, Any]:
+        """Extract file artifacts from the human-approved ChatGPT plan.
+
+        The experimental plan format associates each fenced file-content block with
+        the nearest preceding Assets/... path declaration. This keeps implementation
+        deterministic: the Implementer applies the approved artifact verbatim instead
+        of asking a second model to reproduce it.
+        """
+        lines = plan.splitlines()
+        files: list[dict[str, str]] = []
+        in_fence = False
+        fence_lines: list[str] = []
+        path_for_fence: str | None = None
+        recent_path: str | None = None
+
+        import re
+
+        path_pattern = re.compile(r"(?:\x60)?(Assets/[A-Za-z0-9_./-]+)(?:\x60)?")
+        for line in lines:
+            matches = path_pattern.findall(line)
+            if matches:
+                recent_path = matches[-1]
+
+            if line.startswith("\x60\x60\x60"):
+                if not in_fence:
+                    in_fence = True
+                    fence_lines = []
+                    path_for_fence = recent_path
+                else:
+                    if path_for_fence:
+                        files.append(
+                            {
+                                "path": path_for_fence,
+                                "content": "\n".join(fence_lines) + "\n",
+                            }
+                        )
+                    in_fence = False
+                    fence_lines = []
+                    path_for_fence = None
+                continue
+
+            if in_fence:
+                fence_lines.append(line)
+
+        if in_fence:
+            raise RuntimeError(
+                "Approved ChatGPT plan contains an unterminated code fence."
+            )
+        if not files:
+            raise RuntimeError(
+                "Approved ChatGPT plan contained no file artifacts."
+            )
+
+        deduplicated: dict[str, dict[str, str]] = {}
+        for item in files:
+            path = cls._normalize_path(item["path"])
+            deduplicated[path] = {"path": path, "content": item["content"]}
+
+        return {
+            "summary": f"Applied {len(deduplicated)} file artifact(s) from the approved ChatGPT plan.",
+            "files": list(deduplicated.values()),
+        }
 
     def _generate_structured(self, prompt: str) -> dict[str, Any]:
         request_body = json.dumps(
