@@ -1104,3 +1104,42 @@ The factory should now be treated as a **validated production foundation**, whil
 Important next decision:
 - Do not immediately modify the validated foundation just because the factory milestone is complete.
 - First preserve this state in Git/backup and then decide deliberately whether PR #8 should be promoted/merged and whether this direct ChatGPT implementation workflow should become the normal production path.
+
+
+## 37. 2026-09-25 — STANDING DECISION: CHATGPT LEAD + ARCHITECT + CODER COMBINED
+
+The user explicitly reaffirmed the intended production workflow for game development:
+
+**User idea/requirements**
+→ **ChatGPT performs Lead + Architect + Coder together**
+→ **one Human Review gate**
+→ **constrained local Implementer**
+→ **independent local QA**
+→ **Human Unity validation**
+
+This is the standing decision to remember for future production runs.
+
+The reason is that the user wants ChatGPT to perform the complete planning, architecture, and coding reasoning rather than making local Ollama models regenerate the same design through Lead, Architect, and Coder roles. Local models should be used after approval for the constrained implementation and QA stages.
+
+### GAME-CHARACTER-001 workflow mistake
+
+For GAME-CHARACTER-001, ChatGPT created the implementation plan at experiments/GAME-CHARACTER-001.chatgpt-plan.md, commit 59525cc83c8367a51b46209a7a5e576f546605.
+
+The plan was then mistakenly launched using the production CLI's --spec-file option. In the current devroom/factory-production-workflow CLI, --spec-file invokes the normal local Lead → Architect → Coder planning pipeline. This caused local Ollama activity and several minutes of machine load before the Human Review gate.
+
+This was contrary to the standing ChatGPT-combined Lead/Architect/Coder decision.
+
+The incorrect run was to be stopped rather than treated as a valid production run. The correct next engineering action is to restore/use the direct ChatGPT implementation-plan mechanism so a ChatGPT-authored plan enters the Human Review gate directly, followed only by Implementer → QA → Human Unity validation.
+
+Do not use --spec-file for a ChatGPT-authored implementation plan when the intended workflow is the standing direct ChatGPT path.
+
+### Current relevant Git state
+
+The devroom/factory-production-workflow branch was synchronized locally at commit 59525cc: Add GAME-CHARACTER-001 ChatGPT implementation plan.
+
+The direct ChatGPT implementation mechanism already exists in the experimental branch: devroom/chatgpt-implementer-qa-experiment.
+
+That branch previously proved the desired direct workflow with GAME-FOUNDATION-001:
+**ChatGPT architecture + coding → Human Review → Implementer → QA → Human Unity validation → COMPLETE.**
+
+PR #8 remains a separate promotion decision and must not be merged without explicit human approval.
