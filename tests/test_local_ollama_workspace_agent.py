@@ -84,6 +84,30 @@ class LocalOllamaWorkspaceAgentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             LocalOllamaWorkspaceAgent(model="gemma4:e4b", num_predict=0)
 
+    def test_approved_chatgpt_plan_is_extracted_deterministically(self):
+        plan = """
+### Assets/Omniversel/Core/Omniversel.Core.asmdef
+\x60\x60\x60json
+{"name":"Omniversel.Core"}
+\x60\x60\x60
+
+Create `Assets/Omniversel/Bootstrap/FoundationBootstrap.cs`:
+\x60\x60\x60csharp
+using UnityEngine;
+\x60\x60\x60
+"""
+        payload = LocalOllamaWorkspaceAgent._payload_from_approved_plan(plan)
+        self.assertEqual(len(payload["files"]), 2)
+        self.assertEqual(
+            payload["files"][0]["path"],
+            "Assets/Omniversel/Core/Omniversel.Core.asmdef",
+        )
+        self.assertEqual(
+            payload["files"][1]["path"],
+            "Assets/Omniversel/Bootstrap/FoundationBootstrap.cs",
+        )
+        self.assertEqual(payload["files"][1]["content"], "using UnityEngine;\n")
+
     def test_scope_is_explicit(self):
         with tempfile.TemporaryDirectory() as directory:
             workspace = LocalWorkspaceProvider(directory)
