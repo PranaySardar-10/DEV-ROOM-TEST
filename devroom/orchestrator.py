@@ -426,6 +426,8 @@ class DevRoomOrchestrator:
                         content = provider.read_file(relative_path)
                     except FileNotFoundError:
                         content = "<FILE NOT FOUND>"
+                    except UnicodeDecodeError:
+                        content = "<BINARY OR NON-UTF8 FILE; CONTENT NOT INCLUDED>"
                     contents.append(
                         f"FILE {relative_path}\\nBEGIN ACTUAL CONTENT\\n{content}\\nEND ACTUAL CONTENT"
                     )
