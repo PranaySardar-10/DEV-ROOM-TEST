@@ -36,6 +36,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--workspace", help="Target workspace")
     parser.add_argument("--spec-file", help="UTF-8 task specification file propagated to every production agent")
     parser.add_argument(
+        "--implementation-plan-file",
+        help="Experimental direct path: UTF-8 implementation plan authored by ChatGPT and reviewed by the human before the Implementer runs.",
+    )
+    parser.add_argument(
         "--allowed-path",
         action="append",
         default=[],
@@ -103,6 +107,11 @@ def main() -> int:
             specification = Path(args.spec_file).read_text(encoding="utf-8").strip()
             if not specification:
                 raise ValueError("--spec-file must not be empty")
+            implementation_plan = None
+            if args.implementation_plan_file:
+                implementation_plan = Path(args.implementation_plan_file).read_text(encoding="utf-8").strip()
+                if not implementation_plan:
+                    raise ValueError("--implementation-plan-file must not be empty")
         state_writer = WorkflowStateWriter(state_store, workflow_id)
         orchestrator = build_from_config(config, state_writer=state_writer)
     except (OSError, ValueError, RuntimeError) as exc:
@@ -117,6 +126,7 @@ def main() -> int:
         max_feedback_cycles=max_feedback_cycles,
         specification=specification,
         resume_state=resume_state,
+        implementation_plan=implementation_plan,
     )
     print(f"\nDevRoom finished: {result.stage.value}")
     if result.halted_reason:
