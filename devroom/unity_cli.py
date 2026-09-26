@@ -14,6 +14,7 @@ class UnityCliResult:
     stdout: str
     stderr: str
     log_file: str | None
+    log_excerpt: str = ""
 
     @property
     def succeeded(self) -> bool:
@@ -27,6 +28,8 @@ class UnityCliResult:
         ]
         if self.log_file:
             lines.append(f"LOG FILE: {self.log_file}")
+        if self.log_excerpt.strip():
+            lines.append("UNITY LOG EXCERPT:\n" + self.log_excerpt)
         if self.stderr.strip():
             lines.append("STDERR:\n" + self.stderr.strip())
         if self.stdout.strip():
@@ -96,12 +99,30 @@ class UnityCliRunner:
                 f"{self.stall_timeout_seconds:g}s without observable output."
             ) from exc
 
+        log_excerpt = ""
+        if self.log_file:
+            log_path = Path(self.log_file).expanduser().resolve()
+            if log_path.is_file():
+                try:
+                    lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                    interesting = [
+                        line for line in lines
+                        if "[OMNIVERSEL" in line
+                        or "error CS" in line
+                        or "Exception" in line
+                        or "Command failed" in line
+                    ]
+                    selected = (interesting if interesting else lines[-80:])[-120:]
+                    log_excerpt = "\n".join(selected)
+                except OSError:
+                    log_excerpt = "<UNITY LOG COULD NOT BE READ>"
         return UnityCliResult(
             command=command,
             returncode=completed.returncode,
             stdout=completed.stdout,
             stderr=completed.stderr,
             log_file=self.log_file,
+            log_excerpt=log_excerpt,
         )
 
 
