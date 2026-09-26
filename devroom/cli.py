@@ -11,6 +11,7 @@ from .config import load_config
 from .orchestrator import HumanDecision, Stage
 from .state_store import JsonWorkflowStateStore, WorkflowStateWriter
 from .provider_health import require_available_providers
+from .unity_cli import UnityCliRunner
 
 
 def _human_gate(stage: Stage, prompt: str, context: dict[str, str]):
@@ -66,6 +67,27 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Validate configuration and provider availability, then exit.",
     )
+    parser.add_argument(
+        "--unity-exe",
+        default=None,
+        help="Path to Unity.exe. When supplied, run the configured Unity executeMethod after direct implementation.",
+    )
+    parser.add_argument(
+        "--unity-method",
+        default=None,
+        help="Static Unity Editor method to invoke with -executeMethod.",
+    )
+    parser.add_argument(
+        "--unity-log-file",
+        default=None,
+        help="Optional Unity Editor log file path for DevRoom-invoked validation.",
+    )
+    parser.add_argument(
+        "--unity-stall-timeout",
+        type=float,
+        default=1800.0,
+        help="Seconds without observable Unity process output before DevRoom aborts the run.",
+    )
     args = parser.parse_args()
     if not args.check and not args.resume and (not args.goal or not args.workspace):
         parser.error("--goal and --workspace are required unless --check or --resume is used.")
@@ -113,7 +135,21 @@ def main() -> int:
                 if not implementation_plan:
                     raise ValueError("--implementation-plan-file must not be empty")
         state_writer = WorkflowStateWriter(state_store, workflow_id)
-        orchestrator = build_from_config(config, state_writer=state_writer)
+        unity_cli_runner = None
+        if args.unity_exe is not None:
+            if args.unity_method is None:
+                raise ValueError("--unity-method is required when --unity-exe is supplied")
+            unity_cli_runner = UnityCliRunner(
+                executable=args.unity_exe,
+                method=args.unity_method,
+                stall_timeout_seconds=args.unity_stall_timeout,
+                log_file=args.unity_log_file,
+            )
+        orchestrator = build_from_config(
+            config,
+            state_writer=state_writer,
+            unity_cli_runner=unity_cli_runner,
+        )
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"DevRoom startup failed: {exc}", file=sys.stderr)
         return 2
