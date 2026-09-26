@@ -32,11 +32,13 @@ def build_orchestrator(
 ) -> DevRoomOrchestrator:
     """Construct the execution stack from provider specifications."""
     registry = build_provider_registry(specs, factory=factory)
-    return DevRoomOrchestrator.with_provider_registry(
+    orchestrator = DevRoomOrchestrator.with_provider_registry(
         registry,
         bindings or DEFAULT_ROLE_BINDINGS,
         state_writer=state_writer,
     )
+    orchestrator.unity_cli_runner = unity_cli_runner
+    return orchestrator
 
 
 def build_from_config(
@@ -66,9 +68,14 @@ def build_from_config_file(
     path: str | Path,
     *,
     factory: ProviderFactory | None = None,
+    unity_cli_runner: UnityCliRunner | None = None,
 ) -> DevRoomOrchestrator:
     """Load a JSON config file and construct the complete execution stack."""
-    return build_from_config(load_config(path), factory=factory)
+    return build_from_config(
+        load_config(path),
+        factory=factory,
+        unity_cli_runner=unity_cli_runner,
+    )
 
 
 __all__ = [
