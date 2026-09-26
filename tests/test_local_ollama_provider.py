@@ -27,7 +27,11 @@ class LocalOllamaProviderTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command[0], "curl.exe")
         self.assertEqual(command[1], "-sN")
-        payload = json.loads(command[-1])
+        self.assertEqual(command[-1], "@-")
+        input_data = run.call_args.kwargs["input_data"]
+        self.assertIsInstance(input_data, bytes)
+        self.assertNotIn(input_data.decode("utf-8"), command)
+        payload = json.loads(input_data)
         self.assertEqual(payload["model"], "gemma4:e4b")
         self.assertFalse(payload["think"])
         self.assertTrue(payload["stream"])
@@ -51,7 +55,6 @@ class LocalOllamaProviderTests(unittest.TestCase):
                 AgentTask("Architect", "Design it")
             )
 
-
     @patch("devroom.local_ollama_provider.run_with_stall_timeout")
     def test_role_generation_budget_override_is_used(self, run) -> None:
         run.return_value = ProcessRunResult(
@@ -70,7 +73,7 @@ class LocalOllamaProviderTests(unittest.TestCase):
                 },
             )
         )
-        payload = json.loads(run.call_args.args[0][-1])
+        payload = json.loads(run.call_args.kwargs["input_data"])
         self.assertEqual(payload["options"]["num_predict"], 8192)
 
 

@@ -11,6 +11,7 @@ from .config import load_config
 from .orchestrator import HumanDecision, Stage
 from .state_store import JsonWorkflowStateStore, WorkflowStateWriter
 from .provider_health import require_available_providers
+from .unity_cli import UnityCliRunner
 
 
 def _human_gate(stage: Stage, prompt: str, context: dict[str, str]):
@@ -35,6 +36,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--goal", help="Workflow goal")
     parser.add_argument("--workspace", help="Target workspace")
     parser.add_argument("--spec-file", help="UTF-8 task specification file propagated to every production agent")
+    parser.add_argument(
+        "--implementation-plan-file",
+        help="Experimental direct path: UTF-8 implementation plan authored by ChatGPT and reviewed by the human before the Implementer runs.",
+    )
     parser.add_argument(
         "--allowed-path",
         action="append",
@@ -61,6 +66,27 @@ def _parse_args() -> argparse.Namespace:
         "--check",
         action="store_true",
         help="Validate configuration and provider availability, then exit.",
+    )
+    parser.add_argument(
+        "--unity-exe",
+        default=None,
+        help="Path to Unity.exe. When supplied, run the configured Unity executeMethod after direct implementation.",
+    )
+    parser.add_argument(
+        "--unity-method",
+        default=None,
+        help="Static Unity Editor method to invoke with -executeMethod.",
+    )
+    parser.add_argument(
+        "--unity-log-file",
+        default=None,
+        help="Optional Unity Editor log file path for DevRoom-invoked validation.",
+    )
+    parser.add_argument(
+        "--unity-stall-timeout",
+        type=float,
+        default=1800.0,
+        help="Seconds without observable Unity process output before DevRoom aborts the run.",
     )
     args = parser.parse_args()
     if not args.check and not args.resume and (not args.goal or not args.workspace):
@@ -103,8 +129,27 @@ def main() -> int:
             specification = Path(args.spec_file).read_text(encoding="utf-8").strip()
             if not specification:
                 raise ValueError("--spec-file must not be empty")
+            implementation_plan = None
+            if args.implementation_plan_file:
+                implementation_plan = Path(args.implementation_plan_file).read_text(encoding="utf-8").strip()
+                if not implementation_plan:
+                    raise ValueError("--implementation-plan-file must not be empty")
         state_writer = WorkflowStateWriter(state_store, workflow_id)
-        orchestrator = build_from_config(config, state_writer=state_writer)
+        unity_cli_runner = None
+        if args.unity_exe is not None:
+            if args.unity_method is None:
+                raise ValueError("--unity-method is required when --unity-exe is supplied")
+            unity_cli_runner = UnityCliRunner(
+                executable=args.unity_exe,
+                method=args.unity_method,
+                stall_timeout_seconds=args.unity_stall_timeout,
+                log_file=args.unity_log_file,
+            )
+        orchestrator = build_from_config(
+            config,
+            state_writer=state_writer,
+            unity_cli_runner=unity_cli_runner,
+        )
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"DevRoom startup failed: {exc}", file=sys.stderr)
         return 2
@@ -117,6 +162,7 @@ def main() -> int:
         max_feedback_cycles=max_feedback_cycles,
         specification=specification,
         resume_state=resume_state,
+        implementation_plan=implementation_plan,
     )
     print(f"\nDevRoom finished: {result.stage.value}")
     if result.halted_reason:

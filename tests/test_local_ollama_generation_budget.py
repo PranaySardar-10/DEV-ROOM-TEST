@@ -22,8 +22,9 @@ class LocalOllamaGenerationBudgetTests(unittest.TestCase):
     def test_default_generation_budget_is_explicitly_sent(self) -> None:
         captured = {}
 
-        def fake_runner(command, *, stall_timeout_seconds):
+        def fake_runner(command, *, input_data, stall_timeout_seconds):
             captured["command"] = command
+            captured["input_data"] = input_data
             return type("Completed", (), {
                 "returncode": 0,
                 "stdout": '{"message":{"content":"complete proposal"}}\n{"done":true}\n',
@@ -35,7 +36,7 @@ class LocalOllamaGenerationBudgetTests(unittest.TestCase):
                 LocalOllamaConfig(model="gemma4:e4b")
             ).execute(self._task())
 
-        payload = json.loads(captured["command"][captured["command"].index("-d") + 1])
+        payload = json.loads(captured["input_data"])
         self.assertEqual(payload["options"]["num_predict"], 4096)
         self.assertFalse(payload["think"])
         self.assertEqual(result.summary, "complete proposal")
@@ -43,8 +44,9 @@ class LocalOllamaGenerationBudgetTests(unittest.TestCase):
     def test_custom_generation_budget_is_sent(self) -> None:
         captured = {}
 
-        def fake_runner(command, *, stall_timeout_seconds):
+        def fake_runner(command, *, input_data, stall_timeout_seconds):
             captured["command"] = command
+            captured["input_data"] = input_data
             return type("Completed", (), {
                 "returncode": 0,
                 "stdout": '{"message":{"content":"proposal"}}\n',
@@ -56,7 +58,7 @@ class LocalOllamaGenerationBudgetTests(unittest.TestCase):
                 LocalOllamaConfig(model="gemma4:e4b", num_predict=8192)
             ).execute(self._task())
 
-        payload = json.loads(captured["command"][captured["command"].index("-d") + 1])
+        payload = json.loads(captured["input_data"])
         self.assertEqual(payload["options"]["num_predict"], 8192)
 
     def test_invalid_generation_budget_is_rejected(self) -> None:

@@ -8,6 +8,7 @@ import time
 from .errors import AgentPreflightError
 from .state_store import PersistedWorkflow, WorkflowStateWriter
 from .workspace_provider import LocalWorkspaceProvider
+from .unity_cli import UnityCliRunner
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -139,10 +140,11 @@ class WorkflowResult:
 class DevRoomOrchestrator:
     """Production factory workflow with human approval before integration and Unity validation."""
 
-    def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None, resource_guard: ResourceGuard | None = None) -> None:
+    def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None, resource_guard: ResourceGuard | None = None, unity_cli_runner: UnityCliRunner | None = None) -> None:
         self.provider = provider
         self.state_writer = state_writer
         self.resource_guard = resource_guard or ResourceGuard()
+        self.unity_cli_runner = unity_cli_runner
 
     @classmethod
     def with_provider_registry(
@@ -184,6 +186,7 @@ class DevRoomOrchestrator:
         max_feedback_cycles: int = 3,
         specification: str | None = None,
         resume_state: PersistedWorkflow | None = None,
+        implementation_plan: str | None = None,
     ) -> WorkflowResult:
         if not goal.strip():
             raise ValueError("goal must not be empty")
@@ -194,6 +197,10 @@ class DevRoomOrchestrator:
         if max_feedback_cycles < 0:
             raise ValueError("max_feedback_cycles must be >= 0")
         specification = specification or ""
+        if implementation_plan is not None and not implementation_plan.strip():
+            raise ValueError("implementation_plan must not be blank when supplied")
+        if implementation_plan is not None and resume_state is not None:
+            raise ValueError("implementation-plan runs cannot be resumed yet")
 
         if resume_state is not None:
             if resume_state.goal is not None and resume_state.goal != goal:
@@ -403,15 +410,29 @@ class DevRoomOrchestrator:
             files = "\n".join(str(path) for path in inspection["files"])
             git_status = "\n".join(str(item) for item in inspection["git"])
             allowed = ", ".join(str(path) for path in allowed_paths) or "<none>"
+            actual_files = tuple(str(path) for path in inspection["files"])
             contents: list[str] = []
-            for relative_path in allowed_paths:
-                try:
-                    content = provider.read_file(str(relative_path))
-                except FileNotFoundError:
-                    content = "<FILE NOT FOUND>"
-                contents.append(
-                    f"FILE {relative_path}\nBEGIN ACTUAL CONTENT\n{content}\nEND ACTUAL CONTENT"
-                )
+            for scope in allowed_paths:
+                normalized_scope = str(scope).replace("\\\\", "/").strip("/")
+                matching_files = [
+                    path for path in actual_files
+                    if path == normalized_scope or path.startswith(normalized_scope + "/")
+                ]
+                if not matching_files:
+                    contents.append(
+                        f"FILE {scope}\\nBEGIN ACTUAL CONTENT\\n<FILE NOT FOUND>\\nEND ACTUAL CONTENT"
+                    )
+                    continue
+                for relative_path in matching_files:
+                    try:
+                        content = provider.read_file(relative_path)
+                    except FileNotFoundError:
+                        content = "<FILE NOT FOUND>"
+                    except UnicodeDecodeError:
+                        content = "<BINARY OR NON-UTF8 FILE; CONTENT NOT INCLUDED>"
+                    contents.append(
+                        f"FILE {relative_path}\\nBEGIN ACTUAL CONTENT\\n{content}\\nEND ACTUAL CONTENT"
+                    )
             return {
                 "workspace_evidence": (
                     f"WORKSPACE: {inspection['workspace']}\n"
@@ -442,6 +463,98 @@ class DevRoomOrchestrator:
             feedback = feedback.strip()
             persist(stage, last_decision=decision, last_feedback=feedback)
             return decision, feedback
+
+        # Experimental direct implementation path: ChatGPT supplies the implementation plan,
+        # the normal human gate approves it, then the constrained Implementer and independent
+        # QA execute exactly the same downstream stages used by the production factory.
+        # This intentionally does not alter the existing Lead/Architect/Coder path.
+        if implementation_plan is not None:
+            decision, feedback = gate(
+                Stage.HUMAN_REVIEW,
+                f"Review the ChatGPT-generated implementation plan before integration: {goal}",
+                {
+                    "implementation_plan": implementation_plan,
+                    "decision_options": (
+                        "Approve only if the plan is implementation-ready. "
+                        "Use REQUEST_CHANGES or HALT if it is not."
+                    ),
+                },
+            )
+            if decision is HumanDecision.HALT:
+                reason = feedback or "Human review halted the direct implementation experiment."
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
+            if decision is HumanDecision.REQUEST_CHANGES:
+                reason = feedback or "Direct implementation plan requires changes; regenerate it in ChatGPT and rerun."
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
+
+            implementation = call(
+                Stage.IMPLEMENTER,
+                "Implementer",
+                f"Implement the human-approved ChatGPT plan for: {goal}",
+                {
+                    "approved_proposal": implementation_plan,
+                    "approval_feedback": feedback,
+                    "plan_source": "ChatGPT direct architecture + coding experiment",
+                },
+            )
+            if not implementation.artifacts:
+                reason = "Implementer completed without producing integration artifacts."
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
+
+            unity_cli_summary = ""
+            if self.unity_cli_runner is not None:
+                try:
+                    unity_cli_result = self.unity_cli_runner.run(str(workspace))
+                except (FileNotFoundError, TimeoutError, RuntimeError, OSError) as exc:
+                    reason = f"Unity CLI validation failed to execute: {type(exc).__name__}: {exc}"
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+                unity_cli_summary = unity_cli_result.summary()
+                if not unity_cli_result.succeeded:
+                    reason = (
+                        "Unity CLI validation returned a non-zero exit code.\n"
+                        + unity_cli_summary
+                    )
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+
+            qa_context = {
+                "implementation_summary": implementation.summary,
+                "approved_proposal": implementation_plan,
+            }
+            if unity_cli_summary:
+                qa_context["unity_cli_validation"] = unity_cli_summary
+            qa_context.update(collect_qa_evidence())
+            qa = call(
+                Stage.QA,
+                "QA",
+                f"Independently validate the direct ChatGPT implementation experiment: {goal}",
+                qa_context,
+            )
+
+            validation_decision, validation_feedback = gate(
+                Stage.UNITY_VALIDATION,
+                f"Open the Unity project and validate the actual result of the direct implementation experiment: {goal}",
+                {
+                    "implementation": implementation.summary,
+                    "qa": qa.summary,
+                },
+            )
+            if validation_decision is HumanDecision.APPROVE:
+                history.append(Stage.COMPLETE)
+                persist(Stage.COMPLETE)
+                return WorkflowResult(Stage.COMPLETE, history, results)
+            if validation_decision is HumanDecision.HALT:
+                reason = validation_feedback or "Unity validation halted the direct implementation experiment."
+                persist(Stage.HALTED, reason)
+                return WorkflowResult(Stage.HALTED, history, results, reason)
+
+            reason = validation_feedback or "Unity validation requested changes; regenerate the ChatGPT plan and rerun."
+            persist(Stage.HALTED, reason)
+            return WorkflowResult(Stage.HALTED, history, results, reason)
 
         # Lead is an advisory planning stage. Do not feed raw model-generated Lead
         # output into Architect: upstream free-form text can contain role-like

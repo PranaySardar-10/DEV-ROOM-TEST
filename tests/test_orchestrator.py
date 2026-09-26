@@ -385,6 +385,26 @@ Do not report completion early.
             self.assertIn("DEVROOM_SMOKE_TEST_OK", evidence)
             self.assertIn("ACTUAL GIT STATUS:", evidence)
 
+    def test_qa_reads_files_inside_directory_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            workspace = Path(directory)
+            target = workspace / "Assets" / "Omniversel" / "Bootstrap" / "FoundationBootstrap.cs"
+            target.parent.mkdir(parents=True)
+            target.write_text("Debug.Log(\\\"Omniversel Foundation initialized\\\");", encoding="utf-8")
+            provider = MockProvider()
+            result = DevRoomOrchestrator(provider).run(
+                "Validate foundation files",
+                workspace=str(workspace),
+                allowed_paths=("Assets/Omniversel",),
+                human_gate=self.approve_all,
+            )
+            self.assertEqual(result.stage, Stage.COMPLETE)
+            qa_tasks = [task for task in provider.calls if task.role == "QA"]
+            self.assertEqual(len(qa_tasks), 1)
+            evidence = qa_tasks[0].context["workspace_evidence"]
+            self.assertIn("FILE Assets/Omniversel/Bootstrap/FoundationBootstrap.cs", evidence)
+            self.assertIn("Omniversel Foundation initialized", evidence)
+
     def test_persists_final_workflow_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "workflow.json"
@@ -607,6 +627,84 @@ Do not report completion early.
             DevRoomOrchestrator(provider).run("Goal", workspace="  ")
         with self.assertRaises(ValueError):
             DevRoomOrchestrator(provider).run("Goal", allowed_paths=("",))
+
+
+    def test_direct_chatgpt_plan_runs_optional_unity_cli_before_qa(self) -> None:
+        provider = MockProvider()
+
+        class FakeUnityResult:
+            succeeded = True
+
+            def summary(self):
+                return "Unity CLI validation passed.\nRETURN CODE: 0"
+
+        class FakeUnityRunner:
+            def __init__(self):
+                self.workspaces = []
+
+            def run(self, workspace):
+                self.workspaces.append(workspace)
+                return FakeUnityResult()
+
+        unity_runner = FakeUnityRunner()
+        plan = (
+            "Create the character controller files exactly as approved. "
+            "Apply only the requested character scene integration."
+        )
+
+        result = DevRoomOrchestrator(
+            provider,
+            unity_cli_runner=unity_runner,
+        ).run(
+            "Create playable Joe prototype",
+            workspace=r"D:\OMNIVERSEL ROLEPLAY\OMNIVERSEL ROLEPLAY",
+            allowed_paths=("Assets/Omniversel/Gameplay/Character", "Assets/Scenes"),
+            specification="# Objective\nBuild character.",
+            implementation_plan=plan,
+            human_gate=self.approve_all,
+        )
+
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            unity_runner.workspaces,
+            [r"D:\OMNIVERSEL ROLEPLAY\OMNIVERSEL ROLEPLAY"],
+        )
+        qa_tasks = [task for task in provider.calls if task.role == "QA"]
+        self.assertEqual(len(qa_tasks), 1)
+        self.assertIn("Unity CLI validation passed.", qa_tasks[0].context["unity_cli_validation"])
+
+
+    def test_direct_chatgpt_plan_skips_local_planning_roles(self) -> None:
+        provider = MockProvider()
+        plan = (
+            "Create the foundation files exactly as specified by GAME-FOUNDATION-001. "
+            "Use only the approved Assets/Omniversel scope and do not add gameplay systems."
+        )
+        result = DevRoomOrchestrator(provider).run(
+            "Create the minimal, deterministic Omniversel Roleplay Unity project foundation.",
+            workspace=r"D:\OMNIVERSEL ROLEPLAY\OMNIVERSEL ROLEPLAY",
+            allowed_paths=("Assets/Omniversel",),
+            specification="# Objective\nBuild foundation.",
+            implementation_plan=plan,
+            human_gate=self.approve_all,
+        )
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            result.history,
+            [
+                Stage.HUMAN_REVIEW,
+                Stage.IMPLEMENTER,
+                Stage.QA,
+                Stage.UNITY_VALIDATION,
+                Stage.COMPLETE,
+            ],
+        )
+        self.assertEqual(
+            [task.role for task in provider.calls],
+            ["Implementer", "QA"],
+        )
+        self.assertEqual(provider.calls[0].context["approved_proposal"], plan)
+        self.assertEqual(provider.calls[1].context["approved_proposal"], plan)
 
 
 if __name__ == "__main__":

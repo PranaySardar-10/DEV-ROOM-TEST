@@ -9,6 +9,7 @@ from .state_store import WorkflowStateWriter
 from .provider_factory import ProviderFactory, ProviderSpec, build_default_factory
 from .provider_registry import ProviderRegistry
 from .provider_router import DEFAULT_ROLE_BINDINGS, RoleBinding
+from .unity_cli import UnityCliRunner
 
 
 def build_provider_registry(
@@ -27,14 +28,17 @@ def build_orchestrator(
     bindings: Mapping[str, RoleBinding] | None = None,
     factory: ProviderFactory | None = None,
     state_writer: WorkflowStateWriter | None = None,
+    unity_cli_runner: UnityCliRunner | None = None,
 ) -> DevRoomOrchestrator:
     """Construct the execution stack from provider specifications."""
     registry = build_provider_registry(specs, factory=factory)
-    return DevRoomOrchestrator.with_provider_registry(
+    orchestrator = DevRoomOrchestrator.with_provider_registry(
         registry,
         bindings or DEFAULT_ROLE_BINDINGS,
         state_writer=state_writer,
     )
+    orchestrator.unity_cli_runner = unity_cli_runner
+    return orchestrator
 
 
 def build_from_config(
@@ -42,6 +46,7 @@ def build_from_config(
     *,
     factory: ProviderFactory | None = None,
     state_writer: WorkflowStateWriter | None = None,
+    unity_cli_runner: UnityCliRunner | None = None,
 ) -> DevRoomOrchestrator:
     """Construct the complete execution stack from a loaded DevRoom config."""
     validate_config(config)
@@ -50,6 +55,7 @@ def build_from_config(
         bindings=config.bindings,
         factory=factory,
         state_writer=state_writer,
+        unity_cli_runner=unity_cli_runner,
     )
     orchestrator.resource_guard = ResourceGuard(
         cooldown_after_seconds=config.cooldown_after_seconds,
@@ -62,9 +68,14 @@ def build_from_config_file(
     path: str | Path,
     *,
     factory: ProviderFactory | None = None,
+    unity_cli_runner: UnityCliRunner | None = None,
 ) -> DevRoomOrchestrator:
     """Load a JSON config file and construct the complete execution stack."""
-    return build_from_config(load_config(path), factory=factory)
+    return build_from_config(
+        load_config(path),
+        factory=factory,
+        unity_cli_runner=unity_cli_runner,
+    )
 
 
 __all__ = [

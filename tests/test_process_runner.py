@@ -25,6 +25,21 @@ class ProcessRunnerTests(unittest.TestCase):
                 stall_timeout_seconds=0.2,
             )
 
+    def test_large_stdin_payload_is_supported(self) -> None:
+        script = (
+            "import sys; "
+            "data = sys.stdin.buffer.read(); "
+            "print(len(data), flush=True)"
+        )
+        payload = b"x" * 300_000
+        result = run_with_stall_timeout(
+            (sys.executable, "-c", script),
+            input_data=payload,
+            stall_timeout_seconds=1,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(), str(len(payload)))
+
 
 if __name__ == "__main__":
     unittest.main()

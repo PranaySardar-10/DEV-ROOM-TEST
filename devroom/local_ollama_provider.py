@@ -61,9 +61,10 @@ class LocalOllamaProvider(AgentProvider):
                     self.config.api_url,
                     "-H",
                     "Content-Type: application/json",
-                    "-d",
-                    payload.decode("utf-8"),
+                    "--data-binary",
+                    "@-",
                 ),
+                input_data=payload,
                 stall_timeout_seconds=self.config.stall_timeout_seconds,
             )
         except FileNotFoundError as exc:

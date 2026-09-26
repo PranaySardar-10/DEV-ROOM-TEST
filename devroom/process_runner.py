@@ -18,6 +18,7 @@ class ProcessRunResult:
 def run_with_stall_timeout(
     command: Sequence[str],
     *,
+    input_data: bytes | None = None,
     stall_timeout_seconds: float,
 ) -> ProcessRunResult:
     """Run a process until it exits; abort only after observable output stalls."""
@@ -26,6 +27,7 @@ def run_with_stall_timeout(
 
     process = subprocess.Popen(
         tuple(command),
+        stdin=subprocess.PIPE if input_data is not None else None,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=False,
@@ -50,6 +52,18 @@ def run_with_stall_timeout(
         finally:
             stream.close()
 
+    def write_input() -> None:
+        if process.stdin is None or input_data is None:
+            return
+        try:
+            process.stdin.write(input_data)
+            process.stdin.close()
+        except (BrokenPipeError, OSError):
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+
     stdout_thread = threading.Thread(
         target=drain, args=(process.stdout, stdout_chunks), daemon=True
     )
@@ -58,6 +72,11 @@ def run_with_stall_timeout(
     )
     stdout_thread.start()
     stderr_thread.start()
+
+    input_thread = None
+    if input_data is not None:
+        input_thread = threading.Thread(target=write_input, daemon=True)
+        input_thread.start()
 
     stalled = False
     try:
@@ -76,6 +95,8 @@ def run_with_stall_timeout(
         process.wait()
         stdout_thread.join(timeout=2)
         stderr_thread.join(timeout=2)
+        if input_thread is not None:
+            input_thread.join(timeout=2)
 
     result = ProcessRunResult(
         stdout=b"".join(stdout_chunks).decode("utf-8", errors="replace"),
