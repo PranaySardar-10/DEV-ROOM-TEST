@@ -9,6 +9,7 @@ from .state_store import WorkflowStateWriter
 from .provider_factory import ProviderFactory, ProviderSpec, build_default_factory
 from .provider_registry import ProviderRegistry
 from .provider_router import DEFAULT_ROLE_BINDINGS, RoleBinding
+from .unity_cli import UnityCliRunner
 
 
 def build_provider_registry(
@@ -27,6 +28,7 @@ def build_orchestrator(
     bindings: Mapping[str, RoleBinding] | None = None,
     factory: ProviderFactory | None = None,
     state_writer: WorkflowStateWriter | None = None,
+    unity_cli_runner: UnityCliRunner | None = None,
 ) -> DevRoomOrchestrator:
     """Construct the execution stack from provider specifications."""
     registry = build_provider_registry(specs, factory=factory)
@@ -42,6 +44,7 @@ def build_from_config(
     *,
     factory: ProviderFactory | None = None,
     state_writer: WorkflowStateWriter | None = None,
+    unity_cli_runner: UnityCliRunner | None = None,
 ) -> DevRoomOrchestrator:
     """Construct the complete execution stack from a loaded DevRoom config."""
     validate_config(config)
@@ -50,6 +53,7 @@ def build_from_config(
         bindings=config.bindings,
         factory=factory,
         state_writer=state_writer,
+        unity_cli_runner=unity_cli_runner,
     )
     orchestrator.resource_guard = ResourceGuard(
         cooldown_after_seconds=config.cooldown_after_seconds,
