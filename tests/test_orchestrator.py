@@ -629,6 +629,51 @@ Do not report completion early.
             DevRoomOrchestrator(provider).run("Goal", allowed_paths=("",))
 
 
+    def test_direct_chatgpt_plan_runs_optional_unity_cli_before_qa(self) -> None:
+        provider = MockProvider()
+
+        class FakeUnityResult:
+            succeeded = True
+
+            def summary(self):
+                return "Unity CLI validation passed.\nRETURN CODE: 0"
+
+        class FakeUnityRunner:
+            def __init__(self):
+                self.workspaces = []
+
+            def run(self, workspace):
+                self.workspaces.append(workspace)
+                return FakeUnityResult()
+
+        unity_runner = FakeUnityRunner()
+        plan = (
+            "Create the character controller files exactly as approved. "
+            "Apply only the requested character scene integration."
+        )
+
+        result = DevRoomOrchestrator(
+            provider,
+            unity_cli_runner=unity_runner,
+        ).run(
+            "Create playable Joe prototype",
+            workspace=r"D:\OMNIVERSEL ROLEPLAY\OMNIVERSEL ROLEPLAY",
+            allowed_paths=("Assets/Omniversel/Gameplay/Character", "Assets/Scenes"),
+            specification="# Objective\nBuild character.",
+            implementation_plan=plan,
+            human_gate=self.approve_all,
+        )
+
+        self.assertEqual(result.stage, Stage.COMPLETE)
+        self.assertEqual(
+            unity_runner.workspaces,
+            [r"D:\OMNIVERSEL ROLEPLAY\OMNIVERSEL ROLEPLAY"],
+        )
+        qa_tasks = [task for task in provider.calls if task.role == "QA"]
+        self.assertEqual(len(qa_tasks), 1)
+        self.assertIn("Unity CLI validation passed.", qa_tasks[0].context["unity_cli_validation"])
+
+
     def test_direct_chatgpt_plan_skips_local_planning_roles(self) -> None:
         provider = MockProvider()
         plan = (
