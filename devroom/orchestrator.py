@@ -8,6 +8,7 @@ import time
 from .errors import AgentPreflightError
 from .state_store import PersistedWorkflow, WorkflowStateWriter
 from .workspace_provider import LocalWorkspaceProvider
+from .unity_cli import UnityCliRunner
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -139,10 +140,11 @@ class WorkflowResult:
 class DevRoomOrchestrator:
     """Production factory workflow with human approval before integration and Unity validation."""
 
-    def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None, resource_guard: ResourceGuard | None = None) -> None:
+    def __init__(self, provider: AgentProvider, *, state_writer: WorkflowStateWriter | None = None, resource_guard: ResourceGuard | None = None, unity_cli_runner: UnityCliRunner | None = None) -> None:
         self.provider = provider
         self.state_writer = state_writer
         self.resource_guard = resource_guard or ResourceGuard()
+        self.unity_cli_runner = unity_cli_runner
 
     @classmethod
     def with_provider_registry(
@@ -502,10 +504,29 @@ class DevRoomOrchestrator:
                 persist(Stage.HALTED, reason)
                 return WorkflowResult(Stage.HALTED, history, results, reason)
 
+            unity_cli_summary = ""
+            if self.unity_cli_runner is not None:
+                try:
+                    unity_cli_result = self.unity_cli_runner.run(str(workspace))
+                except (FileNotFoundError, TimeoutError, RuntimeError, OSError) as exc:
+                    reason = f"Unity CLI validation failed to execute: {type(exc).__name__}: {exc}"
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+                unity_cli_summary = unity_cli_result.summary()
+                if not unity_cli_result.succeeded:
+                    reason = (
+                        "Unity CLI validation returned a non-zero exit code.\n"
+                        + unity_cli_summary
+                    )
+                    persist(Stage.HALTED, reason)
+                    return WorkflowResult(Stage.HALTED, history, results, reason)
+
             qa_context = {
                 "implementation_summary": implementation.summary,
                 "approved_proposal": implementation_plan,
             }
+            if unity_cli_summary:
+                qa_context["unity_cli_validation"] = unity_cli_summary
             qa_context.update(collect_qa_evidence())
             qa = call(
                 Stage.QA,
