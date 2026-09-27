@@ -1143,3 +1143,91 @@ That branch previously proved the desired direct workflow with GAME-FOUNDATION-0
 **ChatGPT architecture + coding → Human Review → Implementer → QA → Human Unity validation → COMPLETE.**
 
 PR #8 remains a separate promotion decision and must not be merged without explicit human approval.
+
+## 38. 2026-09-27 — PLAYER VISUAL/CUSTOMIZATION DIRECTION + WORLD ASSET PLANNING
+
+The user explicitly asked that the latest design ideas be preserved in the ongoing backup memory.
+
+### Player Entity architecture
+The player should NOT be architecturally equivalent to the currently used Joe character model. The intended structure is:
+
+```
+PLAYER ENTITY
+├── Movement mechanics
+├── Camera
+├── Input
+├── Jump / crouch / sprint
+├── Interaction
+└── PlayerVisual
+      ├── Joe
+      ├── Future Model A
+      ├── Future Model B
+      └── ...
+```
+
+Joe is only the current visual representation. The Player Entity should own gameplay state/mechanics so a visual model can later be swapped without rebuilding movement, camera, input, identity, networking, inventory, or database identity.
+
+Future model switching should therefore be designed around a visual-representation layer, but **model switching itself is intentionally delayed until the core movement/animation mechanics are stable**.
+
+### Future lightweight character customization
+The long-term character system should avoid requiring a huge number of complete character models. The intended direction is a lightweight, in-game Blender-like customization interface for the equipped character only, focused on parameters/components rather than arbitrary mesh-topology editing.
+
+Planned customization categories include:
+- body type
+- face/surface shape parameters
+- skin/material colors
+- hair styles and hair color
+- shirts
+- jackets
+- pants
+- shoes
+- hats
+- sunglasses
+- other equipment/clothing pieces
+
+Conceptual structure:
+
+```
+PLAYER ENTITY
+├── Body
+│   ├── Body type
+│   ├── Face shape
+│   ├── Skin color
+│   ├── Hair style
+│   ├── Hair color
+│   └── other appearance
+├── Clothing
+│   ├── Shirt
+│   ├── Jacket
+│   ├── Pants
+│   ├── Shoes
+│   ├── Hat
+│   └── Sunglasses
+└── Equipped Character
+     ↓
+Final visual model
+```
+
+Only the equipped character needs to be customized in this mode. A small number of exclusive full character models can exist, while most visual variety should come from parameters, materials, modular clothing, hair, and equipment.
+
+This customization system is a **future design direction only** and is not part of the current core-character implementation task.
+
+### World asset planning: houses, buildings, and interiors
+The user noted that the project has not yet planned the construction of **house/building models and interiors**. This is now explicitly recognized as a future major content/asset-planning area for Omniversel Roleplay.
+
+Future world-building planning will need to account for:
+- exterior house/building models
+- interior layouts and room models
+- doors/entry points and interior access
+- reusable/modular building pieces where appropriate
+- furniture and interior props
+- collision/navigation-ready geometry
+- visual optimization suitable for the eventual mobile target
+- relationship between exterior buildings and their corresponding interiors
+- asset organization and naming conventions
+- a scalable approach so the world does not require every house/interior to be authored as a completely unique heavyweight asset
+
+No house/building/interior implementation is being started by this note. This section records the missing planning area so it is not forgotten when the project moves from core systems into world/content production.
+
+### Current sequencing reminder
+The project should not jump into large-scale world asset production before the current character movement/animation foundation is stable. Houses, buildings, interiors, roads, props, and broader world content remain future production areas to be planned deliberately.
