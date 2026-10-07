@@ -1,0 +1,361 @@
+# OMNIVERSEL ROLEPLAY — MASTER GEOGRAPHY DATA v1.0
+# Purpose: authoritative pre-terrain geographic specification for the Omniversel world.
+# This is NOT a final heightmap. It is the readable source-of-truth used to generate
+# the master terrain and then split it into seamless Unity terrain tiles.
+# Coordinate system:
+#   X = east/west, Z = north/south, Y = elevation in metres.
+#   World origin (0,0,0) is the approximate geographic center of the playable land envelope.
+#   North = +Z, East = +X.
+#
+# References are morphological references only; Omniversel is an original fictional world.
+# No real-world coastline/city is to be copied 1:1.
+
+version: "1.0"
+status: "MASTER_GEOGRAPHY_LOCK_CANDIDATE"
+engine_target: "Unity 6.3 LTS / URP"
+sea_level_m: 0
+terrain_max_area_km2: 1000
+
+world:
+  envelope:
+    width_km: 40
+    depth_km: 25
+    area_km2: 1000
+    min_x_km: -20
+    max_x_km: 20
+    min_z_km: -12.5
+    max_z_km: 12.5
+  ocean:
+    separate_surface: true
+    water_level_m: 0
+    must_extend_beyond_terrain_envelope: true
+  design_rule:
+    - "The atlas is the authoritative spatial composition."
+    - "The world must read as one continuous geographic region."
+    - "Coastline, terrain, rivers and lakes are established before roads or buildings."
+    - "No final region may be generated as an isolated unrelated terrain."
+
+terrain:
+  macro_elevation:
+    sea_level_m: 0
+    coastal_lowland_m: [0, 80]
+    urban_plain_m: [10, 160]
+    rural_lowland_m: [30, 250]
+    rolling_hills_m: [150, 500]
+    forest_hills_m: [250, 900]
+    desert_hills_m: [120, 650]
+    mountain_foothills_m: [400, 1000]
+    mountain_lake_basin_m: [650, 1100]
+    main_mountain_range_m: [900, 1900]
+    highest_peak_target_m: 2100
+  terrain_character:
+    north: "highest and most mountainous part of the world"
+    center: "large lowland/alluvial urban basin with rolling edges"
+    west: "forested hills and rugged port coast"
+    east: "low coastal plain transitioning into desert hills"
+    south: "mostly coastal lowlands with beaches, bays and islands"
+  hydrology_rule: "Every major river must have a credible downhill source, valley, tributary structure and outlet."
+
+regions:
+  - id: NW_COAST
+    name: "North-West Coast"
+    center_km: [-16.0, 9.0]
+    elevation_m: [0, 500]
+    character: "rocky coast, cliffs, fishing/small towns, winding uplands"
+    reference_morphology: "northern Japanese rocky coast + temperate Pacific coast"
+  - id: MILITARY_ZONE
+    name: "Military Zone"
+    center_km: [-12.0, 8.0]
+    elevation_m: [80, 450]
+    character: "large secure plateau/rolling basin surrounded by hills; dedicated airfield"
+    constraints:
+      - "not directly inside a major city"
+      - "highway connection"
+      - "restricted perimeter"
+      - "airfield aligned with usable flat terrain"
+  - id: WESTERN_FOREST
+    name: "Western Forest"
+    center_km: [-12.0, 3.0]
+    elevation_m: [200, 900]
+    character: "dense forest, logging roads, hills, small settlements"
+  - id: PORT_CITY
+    name: "Port City"
+    center_km: [-9.0, -2.0]
+    elevation_m: [0, 90]
+    character: "compact dense port/industrial city on a protected bay"
+    constraints:
+      - "no major beach district"
+      - "no detached suburban housing"
+      - "apartment/residential blocks only where required"
+      - "large working harbor"
+  - id: MAIN_CITY
+    name: "Main City"
+    center_km: [0.0, -1.0]
+    elevation_m: [5, 180]
+    character: "dense Japanese-metropolis-inspired city in a broad coastal/alluvial basin"
+    constraints:
+      - "dense central core"
+      - "older and modern districts"
+      - "large suburban transition"
+      - "hills visible around outer districts"
+  - id: MOUNTAIN_LAKE
+    name: "Mountain Lake Residential"
+    center_km: [-1.0, 4.5]
+    elevation_m: [650, 1050]
+    character: "wealthy lake-and-mountain residential zone"
+  - id: NORTHERN_MOUNTAINS
+    name: "Northern Mountain Range"
+    center_km: [1.5, 8.5]
+    elevation_m: [700, 2100]
+    character: "continuous high mountain backbone, snow-capable peaks, valleys, passes, alpine lakes"
+    constraints:
+      - "highest terrain in world"
+      - "multiple watersheds originate here"
+      - "avoid a straight wall; use several parallel/offset ridges"
+  - id: NORTHERN_RURAL
+    name: "Northern Rural Village"
+    center_km: [6.5, 6.0]
+    elevation_m: [150, 450]
+    character: "Eastern-European-inspired village/farmland between mountain foothills and desert transition"
+  - id: RURAL_FARM
+    name: "Rural Farm Village"
+    center_km: [2.0, 1.5]
+    elevation_m: [50, 220]
+    character: "Japanese-inspired farm village with irrigated/agricultural lowland"
+  - id: EASTERN_RURAL
+    name: "Eastern Rural Region"
+    center_km: [8.5, 1.5]
+    elevation_m: [40, 300]
+    character: "farms, forests, small towns, river corridors"
+  - id: DESERT
+    name: "Desert Region"
+    center_km: [13.0, 7.0]
+    elevation_m: [40, 650]
+    character: "large dry basin with sparse hills, rocky coast, off-road terrain and one dominant lake"
+    constraints:
+      - "one major desert lake only"
+      - "avoid random pond spam"
+      - "oil-rig location near suitable coastal water"
+  - id: AIRPORT
+    name: "Commercial Airport"
+    center_km: [11.5, -0.5]
+    elevation_m: [0, 80]
+    character: "single major commercial airport on broad flat coastal/near-coastal land"
+    constraints:
+      - "only commercial airport"
+      - "must have highway access"
+  - id: COASTAL_CITY
+    name: "Coastal City"
+    center_km: [8.5, -4.0]
+    elevation_m: [0, 120]
+    character: "Miami-inspired warm coastal metropolis with beaches, skyline, waterfront districts and islands"
+    constraints:
+      - "major beach frontage"
+      - "major waterfront"
+      - "commercial airport is nearby but separate"
+  - id: SOUTHERN_RURAL
+    name: "Southern Rural Region"
+    center_km: [0.0, -6.5]
+    elevation_m: [20, 250]
+    character: "farms, rivers, small settlements and coastal rural land"
+  - id: RESORT_ISLAND
+    name: "Resort Island"
+    center_km: [-7.0, -10.0]
+    elevation_m: [0, 280]
+    character: "large functional resort/rich residential island with beaches and interior hills"
+    constraints:
+      - "major island with gameplay purpose"
+      - "bridge/ferry connection as appropriate"
+  - id: PRIVATE_ISLAND
+    name: "Private Island"
+    center_km: [12.0, -9.0]
+    elevation_m: [0, 320]
+    character: "super-rich private island with large estates, privacy walls, pools, gardens and tennis"
+    constraints:
+      - "connected to mainland by bridge"
+      - "not a generic random island"
+
+mountain_systems:
+  - id: NORTHERN_BACKBONE
+    ridge_points_km:
+      - [-8.0, 7.0]
+      - [-4.0, 8.5]
+      - [0.0, 10.0]
+      - [4.0, 9.0]
+      - [7.5, 7.0]
+    peak_targets_m: [1200, 1550, 1900, 2100, 1700]
+    form: "offset ridges with valleys and passes"
+  - id: WESTERN_HILLS
+    ridge_points_km:
+      - [-18.0, 6.0]
+      - [-15.0, 4.0]
+      - [-13.0, 1.5]
+    peak_targets_m: [700, 900, 650]
+    form: "forested rolling mountain foothills"
+  - id: DESERT_RIM
+    ridge_points_km:
+      - [8.0, 8.5]
+      - [12.0, 10.0]
+      - [17.0, 8.0]
+    peak_targets_m: [450, 650, 500]
+    form: "eroded dry hills and rocky ridges"
+
+major_waterbodies:
+  lakes:
+    - id: MOUNTAIN_LAKE
+      center_km: [-1.5, 5.0]
+      approximate_area_km2: 12
+      elevation_m: 780
+      type: "mountain lake"
+      outlet_required: true
+    - id: DESERT_LAKE
+      center_km: [13.0, 7.0]
+      approximate_area_km2: 10
+      elevation_m: 55
+      type: "large desert lake"
+      outlet_required: "natural outlet or closed basin must be intentionally designed"
+    - id: NORTHERN_SMALL_LAKE
+      center_km: [4.5, 8.0]
+      approximate_area_km2: 3
+      elevation_m: 980
+      type: "mountain/alpine lake"
+      outlet_required: true
+  ocean:
+    north: true
+    west: true
+    east: true
+    south: true
+    sea_level_m: 0
+
+major_rivers:
+  - id: CENTRAL_RIVER
+    source_area: "Northern Mountain Range"
+    control_points_km:
+      - [1.0, 9.5]
+      - [0.5, 6.5]
+      - [0.0, 3.0]
+      - [-0.5, 0.5]
+      - [-0.5, -3.5]
+      - [-1.0, -7.0]
+    outlet: "South Ocean"
+    character: "largest central river; broadens through lowlands; urban waterfront/bridges"
+  - id: WEST_RIVER
+    source_area: "Western Forest / northern foothills"
+    control_points_km:
+      - [-11.0, 7.0]
+      - [-12.0, 4.0]
+      - [-11.0, 1.0]
+      - [-10.0, -1.0]
+      - [-10.0, -3.0]
+    outlet: "Port City bay / West Ocean"
+    character: "industrial/port river system with tributaries"
+  - id: EAST_RIVER
+    source_area: "Northern Mountain Range + Mountain Lake"
+    control_points_km:
+      - [5.0, 8.5]
+      - [6.5, 6.0]
+      - [7.0, 3.0]
+      - [8.5, 0.5]
+      - [9.0, -2.5]
+    outlet: "East Ocean near Coastal City"
+    character: "regional river supporting rural land and eastern city"
+  tributary_rule:
+    - "Tributaries must join from higher terrain."
+    - "No major river may run uphill."
+    - "River valleys widen toward lowlands."
+    - "Road bridges must be added only after the river network is locked."
+
+coastline_structure:
+  north: "rocky/mountain-backed coast with coves and small fishing settlements"
+  west: "rugged coast, cliffs, bays and Port City harbor"
+  east: "mixed beach/rock coast around Coastal City and Desert; sparse offshore islets"
+  south: "longer beach coast with bays, Resort Island and Private Island"
+  coastline_rules:
+    - "avoid repetitive circular bays"
+    - "alternate exposed coast, coves, cliffs, beaches and wetlands"
+    - "major cities need deliberately shaped waterfronts"
+    - "islands must have a gameplay/ecological reason"
+    - "small scenic rocks/islets are allowed but must remain sparse"
+
+islands:
+  - id: RESORT_ISLAND
+    purpose: "rich resort / residential / recreation"
+    connection: "bridge or ferry"
+  - id: PRIVATE_ISLAND
+    purpose: "super-rich private residential"
+    connection: "bridge"
+  - id: SCENIC_ISLETS
+    count_target: "few"
+    purpose: "navigation/scenery only"
+
+geographic_references:
+  primary:
+    - "Japan: mountainous backbone, short steep rivers, alluvial plains, dense lowland urban concentration"
+    - "Miami / South Florida: low coastal plain, beaches, bays, barrier/island relationships and warm coastal urban form"
+    - "Eastern Europe: agricultural villages, mixed forest/farm rolling countryside"
+    - "GTA-style open-world composition: gameplay-readable region separation and road connectivity"
+  rule: "References guide morphology only; do not reproduce real locations."
+
+terrain_generation_rules:
+  macro_pass:
+    - "Generate broad elevation from ridge/valley control points."
+    - "Preserve explicit mountain peaks and major basins."
+    - "Create coastal lowlands before carving final shoreline."
+    - "Create drainage-consistent slopes before river geometry."
+  hydrology:
+    - "Use hydrologically conditioned terrain for final drainage derivation."
+    - "Retain only intentional natural closed basins such as the desert lake."
+    - "Major river source elevations must exceed outlet elevations."
+  city_placement:
+    - "Cities occupy plausible lowland/harbor/terrace areas, not arbitrary flat patches."
+    - "Main City sits on a broad lowland with nearby hills."
+    - "Port City sits on a sheltered industrial bay."
+    - "Coastal City sits on a warm low coastal plain."
+  optimization:
+    - "Master geography is generated once, then divided into seamless terrain tiles."
+    - "No independent terrain tile may invent a conflicting coastline or watershed."
+
+terrain_tiling:
+  preferred_tile_size_km: 5
+  grid:
+    columns: 8
+    rows: 5
+    tile_count: 40
+  tile_size_m: [5000, 5000]
+  heightmap_target_per_tile: 4097
+  nominal_height_sample_spacing_m: 1.2207
+  seam_rule: "Adjacent tiles must share identical border samples."
+  world_coordinate_rule: "Tile coordinates are derived from the master world origin; never re-center individual tiles."
+
+production_order:
+  - "1. Master geography / base height"
+  - "2. Terrain tiling and seam validation"
+  - "3. Terrain materials"
+  - "4. Rivers, lakes and roads"
+  - "5. Buildings and major structures"
+  - "6. Vegetation"
+  - "7. Props/environment dressing"
+  - "8. Final shaders, lighting and visual optimization"
+
+first_build_target:
+  name: "Omniversel Master Geography v1"
+  goal: "A complete low-detail terrain silhouette that is recognizable as the atlas when viewed from above."
+  must_contain:
+    - "complete outer coastline"
+    - "all major islands"
+    - "Northern Mountain Range"
+    - "Western forest hills"
+    - "Desert basin and Desert Lake"
+    - "Mountain Lake"
+    - "three major river corridors"
+    - "Main City basin"
+    - "Port City bay"
+    - "Coastal City plain"
+    - "Military Zone plateau"
+    - "Airport flat"
+  must_not_contain_yet:
+    - "final buildings"
+    - "final road network"
+    - "final vegetation"
+    - "final props"
+    - "final shaders"
